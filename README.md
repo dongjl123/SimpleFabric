@@ -26,7 +26,7 @@ TransProposal(proposalArgs, proposalReply) //客户端调用，发送交易提�
 
 PushBlock(puArgs, puReply) //排序节点调用，发送区块给主节点
 
-RegisterEvent(reEvArgs, reEvArgs) //注册事件，由客户调用，监听自己的交易是否被成功commit
+RegisterEvent(reEvArgs, reEvReply) //注册事件，由客户调用，监听自己的交易是否被成功commit
 ```
 
 
@@ -76,14 +76,35 @@ Orderer本地函数（做单节点版本）
 ## 数据结构
 
 ```go
+//交易提案，应该包含交易调用的函数和参数，身份信息
 type TransProposal struct{
     
 }
-
+//交易，应该包含交易的读写集，身份信息。
 type Transaction struct{
     
 }
+//区块，应该包含前一个区块的哈希，当前区块的块号，交易数据
+type Block struct{
+    
+}
+//交易模拟器，包含读集合与写集合
+type TxSimulator struct{
+    
+}
+//交易缓存器，排序节点用来缓存未被打包入块的交易
+type TxBuffer struct{
+    
+}
 
+//存储peer信息的结构体，维护peer自身的一些状态
+type Peer struct{
+    
+}
 
+//存储orderer信息的结构体，维护orderer自身的一些状态
+type Orderer struct{
+    
+}
 ```
 
