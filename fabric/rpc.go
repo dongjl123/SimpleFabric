@@ -1,4 +1,4 @@
-package fbrpc
+package fabric
 
 type proposalArgs struct {
 }
