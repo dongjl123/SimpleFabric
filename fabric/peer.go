@@ -1,5 +1,13 @@
 package fabric
 
+import (
+	"log"
+	"net"
+	"net/http"
+	"net/rpc"
+	"os"
+)
+
 //一个块一个文件
 type LedgerManager struct {
 	dir         string
@@ -20,17 +28,26 @@ func (p *Peer) TransProposal(args *ProposalArgs, reply *ProposalReply) {
 }
 
 //排序节点调用，发送区块给主节点
-func PushBlock(PuArgs, PuReply) {
+func (p *Peer) PushBlock(PuArgs, PuReply) {
 
 }
 
 //注册事件，由客户调用，监听自己的交易是否被成功commit
-func RegisterEvent(ReEvArgs, ReEvReply) {
+func (p *Peer) RegisterEvent(ReEvArgs, ReEvReply) {
 
 }
 
 func (p *Peer) Server() {
-
+	rpc.Register(p)
+	rpc.HandleHTTP()
+	//l, e := net.Listen("tcp", ":1234")
+	sockname := peerSock()
+	os.Remove(sockname)
+	l, e := net.Listen("unix", sockname)
+	if e != nil {
+		log.Fatal("listen error:", e)
+	}
+	go http.Serve(l, nil)
 }
 
 func NewPeer(org string, peerid int) *Peer {
