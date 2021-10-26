@@ -22,11 +22,11 @@ RPC（暂时使用go net/rpc 库，默认使用gob编码）
 Peer远程服务函数
 
 ```go
-TransProposal(proposalArgs, proposalReply) //客户端调用，发送交易提案给Peer
+TransProposal(ProposalArgs, ProposalReply) //客户端调用，发送交易提案给Peer
 
-PushBlock(puArgs, puReply) //排序节点调用，发送区块给主节点
+PushBlock(PuArgs, PuReply) //排序节点调用，发送区块给主节点
 
-RegisterEvent(reEvArgs, reEvReply) //注册事件，由客户调用，监听自己的交易是否被成功commit
+RegisterEvent(ReEvArgs, ReEvReply) //注册事件，由客户调用，监听自己的交易是否被成功commit
 ```
 
 
@@ -34,9 +34,9 @@ RegisterEvent(reEvArgs, reEvReply) //注册事件，由客户调用，监听自�
 Orderer远程服务函数
 
 ```go
-TransOrder(orderArgs, orderReply) //客户端调用，发送交易给排序节点
+TransOrder(OrderArgs, OrderReply) //客户端调用，发送交易给排序节点
 
-RegisterPrimary(reprArgs, reprReply) //peer调用，在排序节点上注册为主节点
+RegisterPrimary(ReprArgs, ReprReply) //peer调用，在排序节点上注册为主节点
 ```
 
 

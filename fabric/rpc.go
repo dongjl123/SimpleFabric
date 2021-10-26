@@ -1,24 +1,24 @@
 package fabric
 
-type proposalArgs struct {
+type ProposalArgs struct {
 }
 
-type proposalReply struct {
+type ProposalReply struct {
 }
 
-type puArgs struct {
+type PuArgs struct {
 }
-type puReply struct {
+type PuReply struct {
 }
-type reEvArgs struct {
+type ReEvArgs struct {
 }
-type reEvReply struct {
+type ReEvReply struct {
 }
-type orderArgs struct {
+type OrderArgs struct {
 }
-type orderReply struct {
+type OrderReply struct {
 }
-type reprArgs struct {
+type ReprArgs struct {
 }
-type reprReply struct {
+type ReprReply struct {
 }
