@@ -17,7 +17,7 @@ type LedgerManager struct {
 //存储peer信息的结构体，维护peer自身的一些状态
 type Peer struct {
 	organization string
-	peerId       int
+	peerId       string
 	stateDB      map[string]string
 	blockLedger  LedgerManager
 }
@@ -50,6 +50,6 @@ func (p *Peer) Server() {
 	go http.Serve(l, nil)
 }
 
-func NewPeer(org string, peerid int) *Peer {
+func NewPeer(org string, peerid string) (*Peer, error) {
 
 }
