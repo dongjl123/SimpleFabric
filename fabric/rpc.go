@@ -1,10 +1,5 @@
 package fabric
 
-import (
-	"os"
-	"strconv"
-)
-
 type ProposalArgs struct {
 }
 
@@ -32,14 +27,14 @@ type ReprReply struct {
 // in /var/tmp, for the peer or orderer.
 // Can't use the current directory since
 // Athena AFS doesn't support UNIX-domain sockets.
-func peerSock() string {
+func peerSock(org, peerid string) string {
 	s := "/var/tmp/peer-"
-	s += strconv.Itoa(os.Getuid())
+	s = s + org + "-" + peerid
 	return s
 }
 
-func ordererSock() string {
+func ordererSock(org, peerid string) string {
 	s := "/var/tmp/orderer-"
-	s += strconv.Itoa(os.Getuid())
+	s = s + org + "-" + peerid
 	return s
 }
