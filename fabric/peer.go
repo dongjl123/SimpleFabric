@@ -22,6 +22,21 @@ type Peer struct {
 	blockLedger  LedgerManager
 }
 
+type ReadItem struct {
+	key     string
+	value   string
+	version string
+}
+
+type WriteItem struct {
+	key   string
+	value string
+}
+type RWSet struct {
+	ReadSet  []ReadItem
+	WriteSet []WriteItem
+}
+
 //客户端调用，发送交易提案给Peer
 func (p *Peer) TransProposal(args *ProposalArgs, reply *ProposalReply) {
 

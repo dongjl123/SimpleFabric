@@ -1,9 +1,12 @@
 package fabric
 
 type ProposalArgs struct {
+	TP TransProposal
 }
 
 type ProposalReply struct {
+	isSuccess bool
+	RW        RWSet
 }
 
 type PuArgs struct {
