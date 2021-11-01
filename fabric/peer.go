@@ -57,6 +57,7 @@ func (s stateDB) put(key string, val int, ver keyVersion) {
 	s[key] = stateDBItem{value: val, version: ver}
 }
 
+//链码函数，转账功能
 func (p *Peer) transfer(args [3]string) RWSet {
 	val1, ver1 := p.db.get(args[0])
 	val2, ver2 := p.db.get(args[1])
