@@ -1,7 +1,10 @@
 package fabric
 
 import (
+	"bytes"
+	"encoding/gob"
 	"fmt"
+	"hash/fnv"
 	"log"
 	"net/rpc"
 	"strconv"
@@ -43,15 +46,41 @@ func SendProposal(org string, peerID string, txp TransProposal) (ProposalReply, 
 	return sendReply, err
 }
 
-func makeTxID(t Transaction) int {
-
+func ihash(key string) int {
+	h := fnv.New32a()
+	h.Write([]byte(key))
+	return int(h.Sum32() & 0x7fffffff)
 }
 
-func NewTx(rwset RWSet, identity string) {
-
+func Encode(data interface{}) ([]byte, error) {
+	buf := bytes.NewBuffer(nil)
+	enc := gob.NewEncoder(buf)
+	err := enc.Encode(data)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
-func SendTx() {
+func makeTxID(id string, data RWSet) (int, error) {
+	encodeData, err := Encode(data)
+	if err != nil {
+		return 0, err
+	}
+	return ihash(id + string(encodeData)), nil
+}
+
+func NewTx(rwset RWSet, identity string) (Transaction, err) {
+	txID, err := makeTxID(identity, rwset)
+	if err != nil {
+		fmt.Println("'make TxID ERROR: ", err)
+		return nil, err
+	}
+	newTx := Transaction{RWSet: rwset, identity: identity, TxID: txID}
+	return newTx, nil
+}
+
+func SendTx(Tx Transaction) {
 
 }
 
@@ -107,7 +136,13 @@ func Client(id int, doneChan chan bool) {
 		return
 	}
 	//生成交易，发送交易
-
+	Tx, err := NewTx(RWSlice[0], identity)
+	if err != nil {
+		fmt.Println("New TX ERROR")
+		doneChan <- false
+		return
+	}
+	SendTx(Tx)
 	//监听
 }
 
