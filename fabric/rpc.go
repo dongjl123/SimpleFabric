@@ -18,14 +18,17 @@ type ReEvArgs struct {
 type ReEvReply struct {
 }
 type OrderArgs struct {
-	TP TransProposal
+	TX Transaction
 }
 type OrderReply struct {
 	isSuccess bool
 }
 type ReprArgs struct {
+	peerid string
+	org    string
 }
 type ReprReply struct {
+	isSuccess bool
 }
 
 // Cook up a unique-ish UNIX-domain socket name

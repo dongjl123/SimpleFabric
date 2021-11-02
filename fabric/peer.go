@@ -1,6 +1,7 @@
 package fabric
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -32,6 +33,7 @@ type Peer struct {
 	peerId       string
 	db           stateDB
 	blockLedger  LedgerManager
+	isPrPeer     bool
 }
 
 type ReadItem struct {
@@ -69,6 +71,13 @@ func (p *Peer) transfer(args [3]string) RWSet {
 	return RWSet{ReadSet: []ReadItem{readKey1, readKey2}, WriteSet: []WriteItem{writeKey1, writeKey2}}
 }
 
+func (p *Peer) BePrimaryPeer() (ReprReply, error) {
+	reprArgs := ReprArgs{peerid: p.peerId, org: p.organization}
+	reprReply := ReprReply{}
+	err := call("orderorg", "orderer1", "RegisterPrimary", &reprArgs, &reprReply)
+	return reprReply, err
+}
+
 //客户端调用，发送交易提案给Peer
 func (p *Peer) TransProposal(args *ProposalArgs, reply *ProposalReply) {
 	if args.TP.funName == "transfer" {
@@ -101,11 +110,18 @@ func (p *Peer) Server() {
 	go http.Serve(l, nil)
 }
 
-func NewPeer(org string, peerid string) (*Peer, error) {
-	p := Peer{organization: org, peerId: peerid}
+func NewPeer(org string, peerid string, isprpeer bool) (*Peer, error) {
+	p := Peer{organization: org, peerId: peerid, isPrPeer: isprpeer}
 	p.db = make(stateDB)
 	currentDir, _ := os.Getwd()
 	ledgerPath := currentDir + "/" + org + "_" + peerid
 	p.blockLedger = LedgerManager{dir: ledgerPath, blockHeight: 0}
+	if p.isPrPeer {
+		reprReply, err := p.BePrimaryPeer()
+		if err != nil || reprReply.isSuccess == false {
+			fmt.Println("register primary peer fail:", err)
+			return nil, err
+		}
+	}
 	return &p, nil
 }
