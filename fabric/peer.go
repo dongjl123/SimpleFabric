@@ -102,5 +102,10 @@ func (p *Peer) Server() {
 }
 
 func NewPeer(org string, peerid string) (*Peer, error) {
-
+	p := Peer{organization: org, peerId: peerid}
+	p.db = make(stateDB)
+	currentDir, _ := os.Getwd()
+	ledgerPath := currentDir + "/" + org + "_" + peerid
+	p.blockLedger = LedgerManager{dir: ledgerPath, blockHeight: 0}
+	return &p, nil
 }

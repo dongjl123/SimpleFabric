@@ -12,7 +12,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Peer argument loss...\n")
 		os.Exit(1)
 	}
-	p := fb.NewPeer(os.Args[1], os.Args[2])
+	p, _ := fb.NewPeer(os.Args[1], os.Args[2])
 	go p.Server()
 	select {} //wait
 }

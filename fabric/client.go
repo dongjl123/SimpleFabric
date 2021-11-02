@@ -70,18 +70,21 @@ func makeTxID(id string, data RWSet) (int, error) {
 	return ihash(id + string(encodeData)), nil
 }
 
-func NewTx(rwset RWSet, identity string) (Transaction, err) {
+func NewTx(rwset RWSet, identity string) (Transaction, error) {
 	txID, err := makeTxID(identity, rwset)
 	if err != nil {
 		fmt.Println("'make TxID ERROR: ", err)
-		return nil, err
+		return Transaction{}, err
 	}
 	newTx := Transaction{RWSet: rwset, identity: identity, TxID: txID}
 	return newTx, nil
 }
 
-func SendTx(Tx Transaction) {
-
+func SendTx(Tx Transaction) (OrderReply, error) {
+	ordArgs := OrderArgs{}
+	ordReply := OrderReply{}
+	err := call("orderorg", "orderer1", "TransOrder", &ordArgs, &ordReply)
+	return ordReply, err
 }
 
 //背书提案验证函数
@@ -142,8 +145,14 @@ func Client(id int, doneChan chan bool) {
 		doneChan <- false
 		return
 	}
-	SendTx(Tx)
+	sendReply, err := SendTx(Tx)
+	if err != nil || sendReply.isSuccess == false {
+		fmt.Println("send Tx fail:", err)
+		doneChan <- false
+		return
+	}
 	//监听
+
 }
 
 func call(org string, peerid string, rpcname string, args interface{}, reply interface{}) error {

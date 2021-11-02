@@ -18,8 +18,10 @@ type ReEvArgs struct {
 type ReEvReply struct {
 }
 type OrderArgs struct {
+	TP TransProposal
 }
 type OrderReply struct {
+	isSuccess bool
 }
 type ReprArgs struct {
 }
