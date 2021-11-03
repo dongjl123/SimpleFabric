@@ -118,7 +118,7 @@ func NewPeer(org string, peerid string, isprpeer bool) (*Peer, error) {
 	p.blockLedger = LedgerManager{dir: ledgerPath, blockHeight: 0}
 	if p.isPrPeer {
 		reprReply, err := p.BePrimaryPeer()
-		if err != nil || reprReply.isSuccess == false {
+		if err != nil || reprReply.IsSuccess == false {
 			fmt.Println("register primary peer fail:", err)
 			return nil, err
 		}
