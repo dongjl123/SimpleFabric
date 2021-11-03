@@ -87,6 +87,13 @@ func SendTx(Tx Transaction) (OrderReply, error) {
 	return ordReply, err
 }
 
+func ClientRegisterEvent(txid string) (ReEvReply, error) {
+	reArgs := ReEvArgs{TxID: txid}
+	reReply := ReEvReply{}
+	err := call(orgs[0], peers[0], "RegisterEvent", &reArgs, &reReply)
+	return reReply, err
+}
+
 //背书提案验证函数
 func endorserVaildator(RWSlice []RWSet) bool {
 	if len((RWSlice)) < orgNum {
@@ -152,7 +159,18 @@ func Client(id int, doneChan chan bool) {
 		return
 	}
 	//监听
-
+	reReply, err := ClientRegisterEvent(identity)
+	if err != nil {
+		fmt.Println("listen registered event error")
+		doneChan <- false
+		return
+	}
+	if reReply.IsSuccess == false {
+		doneChan <- false
+		return
+	}
+	doneChan <- true
+	return
 }
 
 func call(org string, peerid string, rpcname string, args interface{}, reply interface{}) error {

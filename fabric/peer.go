@@ -27,6 +27,10 @@ type stateDBItem struct {
 
 type stateDB map[string]stateDBItem
 
+type eventHandler struct {
+	informChan chan bool
+}
+
 //存储peer信息的结构体，维护peer自身的一些状态
 type Peer struct {
 	organization string
@@ -34,6 +38,7 @@ type Peer struct {
 	db           stateDB
 	blockLedger  LedgerManager
 	isPrPeer     bool
+	eventList    map[string]eventHandler
 }
 
 type ReadItem struct {
@@ -93,8 +98,20 @@ func (p *Peer) PushBlock(PuArgs, PuReply) {
 }
 
 //注册事件，由客户调用，监听自己的交易是否被成功commit
-func (p *Peer) RegisterEvent(ReEvArgs, ReEvReply) {
-
+func (p *Peer) RegisterEvent(reArgs ReEvArgs, reReply ReEvReply) {
+	//一个潜在的bug，如果交易ID发生了哈希碰撞，可能会导致RPC连接一直挂着
+	newHandler := eventHandler{}
+	newHandler.informChan = make(chan bool)
+	p.eventList[reArgs.TxID] = newHandler
+	select {
+	case isSuccess := <-newHandler.informChan:
+		if isSuccess == true {
+			reReply.IsSuccess = true
+		} else {
+			reReply.IsSuccess = false
+		}
+	}
+	return
 }
 
 func (p *Peer) Server() {

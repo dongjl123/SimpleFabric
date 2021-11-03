@@ -14,8 +14,10 @@ type PuArgs struct {
 type PuReply struct {
 }
 type ReEvArgs struct {
+	TxID string
 }
 type ReEvReply struct {
+	IsSuccess bool
 }
 type OrderArgs struct {
 	TX Transaction
