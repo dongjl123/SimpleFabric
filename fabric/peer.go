@@ -83,6 +83,26 @@ func (p *Peer) BePrimaryPeer() (ReprReply, error) {
 	return reprReply, err
 }
 
+func pubilshEvent(b Block) {
+
+}
+
+func (p *Peer) validate(b Block) []Transaction {
+
+}
+
+func (p *Peer) commiter(b Block) {
+
+}
+
+func (p *Peer) updateDB(txs []Transaction) {
+
+}
+
+func (p *Peer) handleBlock(b Block) {
+
+}
+
 //客户端调用，发送交易提案给Peer
 func (p *Peer) TransProposal(args *ProposalArgs, reply *ProposalReply) {
 	if args.TP.funName == "transfer" {
@@ -93,8 +113,18 @@ func (p *Peer) TransProposal(args *ProposalArgs, reply *ProposalReply) {
 }
 
 //排序节点调用，发送区块给主节点
-func (p *Peer) PushBlock(PuArgs, PuReply) {
-
+func (p *Peer) PushBlock(puArgs PuArgs, puReply PuReply) {
+	//如果是主节点，需要把区块同步推送到组织内其他节点
+	if p.isPrPeer == true {
+		for _, otherPeer := range peers {
+			if otherPeer != p.peerId {
+				args := PuArgs{Block: puArgs.Block}
+				reply := PuReply{}
+				go call(p.organization, otherPeer, "PushBlock", &args, &reply)
+			}
+		}
+	}
+	return
 }
 
 //注册事件，由客户调用，监听自己的交易是否被成功commit

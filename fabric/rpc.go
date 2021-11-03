@@ -10,8 +10,10 @@ type ProposalReply struct {
 }
 
 type PuArgs struct {
+	Block
 }
 type PuReply struct {
+	IsSuccess bool
 }
 type ReEvArgs struct {
 	TxID string

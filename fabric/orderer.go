@@ -8,6 +8,10 @@ type Orderer struct {
 	blockLedger  LedgerManager
 }
 
+type Block struct {
+	TxSlice []Transaction
+}
+
 //客户端调用，发送交易给排序节点
 func (o *Orderer) TransOrder(args *OrderArgs, reply *OrderReply) {
 	o.OrderArgsBuf = append(o.OrderArgsBuf, args.TX)
