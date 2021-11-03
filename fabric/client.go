@@ -81,7 +81,7 @@ func NewTx(rwset RWSet, identity string) (Transaction, error) {
 }
 
 func SendTx(Tx Transaction) (OrderReply, error) {
-	ordArgs := OrderArgs{Tx}
+	ordArgs := OrderArgs{TX: Tx}
 	ordReply := OrderReply{}
 	err := call("orderorg", "orderer1", "TransOrder", &ordArgs, &ordReply)
 	return ordReply, err

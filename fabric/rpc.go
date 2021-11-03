@@ -24,8 +24,11 @@ type OrderReply struct {
 	IsSuccess bool
 }
 type ReprArgs struct {
+	peerid string
+	org    string
 }
 type ReprReply struct {
+	IsSuccess bool
 }
 
 // Cook up a unique-ish UNIX-domain socket name
