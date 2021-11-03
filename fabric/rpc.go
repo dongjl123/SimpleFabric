@@ -5,7 +5,7 @@ type ProposalArgs struct {
 }
 
 type ProposalReply struct {
-	isSuccess bool
+	IsSuccess bool
 	RW        RWSet
 }
 
@@ -18,10 +18,10 @@ type ReEvArgs struct {
 type ReEvReply struct {
 }
 type OrderArgs struct {
-	TP TransProposal
+	TX Transaction
 }
 type OrderReply struct {
-	isSuccess bool
+	IsSuccess bool
 }
 type ReprArgs struct {
 }

@@ -81,7 +81,7 @@ func NewTx(rwset RWSet, identity string) (Transaction, error) {
 }
 
 func SendTx(Tx Transaction) (OrderReply, error) {
-	ordArgs := OrderArgs{}
+	ordArgs := OrderArgs{Tx}
 	ordReply := OrderReply{}
 	err := call("orderorg", "orderer1", "TransOrder", &ordArgs, &ordReply)
 	return ordReply, err
@@ -127,7 +127,7 @@ func Client(id int, doneChan chan bool) {
 			fmt.Println("send Proposal fail: ", err)
 			continue
 		}
-		if sendReply.isSuccess == false {
+		if sendReply.IsSuccess == false {
 			fmt.Println("ERROR: ", orgs[i], peers[0], " endorser failed")
 		} else {
 			RWSlice = append(RWSlice, sendReply.RW)
@@ -146,7 +146,7 @@ func Client(id int, doneChan chan bool) {
 		return
 	}
 	sendReply, err := SendTx(Tx)
-	if err != nil || sendReply.isSuccess == false {
+	if err != nil || sendReply.IsSuccess == false {
 		fmt.Println("send Tx fail:", err)
 		doneChan <- false
 		return

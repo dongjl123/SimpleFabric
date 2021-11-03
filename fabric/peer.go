@@ -26,12 +26,15 @@ type stateDBItem struct {
 
 type stateDB map[string]stateDBItem
 
+type event
+
 //存储peer信息的结构体，维护peer自身的一些状态
 type Peer struct {
 	organization string
 	peerId       string
 	db           stateDB
 	blockLedger  LedgerManager
+	eventList    
 }
 
 type ReadItem struct {
@@ -74,7 +77,7 @@ func (p *Peer) TransProposal(args *ProposalArgs, reply *ProposalReply) {
 	if args.TP.funName == "transfer" {
 		reply.RW = p.transfer(args.TP.args)
 	} //后续在这里可以用if else添加其他处理函数
-	reply.isSuccess = true
+	reply.IsSuccess = true
 	return
 }
 

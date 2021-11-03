@@ -41,6 +41,10 @@ RegisterPrimary(ReprArgs, ReprReply) //peer调用，在排序节点上注册为�
 
 
 
+Client远程服务函数
+
+
+
 ## 本地函数
 
 Client本地函数
