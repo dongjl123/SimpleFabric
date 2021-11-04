@@ -29,7 +29,7 @@ type TransProposal struct {
 
 //交易，应该包含交易ID，交易的读写集，身份信息。
 type Transaction struct {
-	TxID     int
+	TxID     string
 	identity string
 	RWSet
 }
@@ -62,12 +62,14 @@ func Encode(data interface{}) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func makeTxID(id string, data RWSet) (int, error) {
+func makeTxID(id string, data RWSet) (string, error) {
 	encodeData, err := Encode(data)
 	if err != nil {
-		return 0, err
+		return "", err
 	}
-	return ihash(id + string(encodeData)), nil
+	txid := ihash(id + string(encodeData))
+	txidString := strconv.Itoa(txid)
+	return txidString, nil
 }
 
 func NewTx(rwset RWSet, identity string) (Transaction, error) {

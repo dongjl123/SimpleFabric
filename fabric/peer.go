@@ -57,6 +57,19 @@ type RWSet struct {
 	WriteSet []WriteItem
 }
 
+type ValidateTrascation struct {
+	Transaction
+	IsSuccess bool
+}
+
+type ValidateBlock []ValidateTrascation
+
+var blockChan chan Block
+
+func (s stateDB) getVersion(key string) keyVersion {
+	return s[key].version
+}
+
 func (s stateDB) get(key string) (int, keyVersion) {
 	return s[key].value, s[key].version
 }
@@ -84,24 +97,57 @@ func (p *Peer) BePrimaryPeer() (ReprReply, error) {
 	return reprReply, err
 }
 
-func pubilshEvent(b Block) {
-
+func pubilshEvent(b ValidateBlock, eventList map[string]eventHandler) {
+	for _, i := range b {
+		e, ok := eventList[i.Transaction.TxID]
+		if !ok {
+			continue
+		}
+		if i.IsSuccess {
+			e.informChan <- true
+		} else {
+			e.informChan <- false
+		}
+		return
+	}
 }
 
-func (p *Peer) validate(b Block) []Transaction {
-
+//验证函数，比较读键的版本
+func (p *Peer) validate(b Block) ValidateBlock {
+	vb := ValidateBlock{}
+	for _, tx := range b.TxSlice {
+		isRight := true
+		//比较读键
+		for _, ri := range tx.RWSet.ReadSet {
+			if ri.version != p.db.getVersion(ri.key) {
+				isRight = false
+				break
+			}
+		}
+		vb = append(vb, ValidateTrascation{Transaction: tx, IsSuccess: isRight})
+	}
+	return vb
 }
 
+//这里写入账本的只是原始的区块，不带验证数据。只是一个模拟写账本文件的过程。
 func (p *Peer) commiter(b Block) {
 
 }
 
-func (p *Peer) updateDB(txs []Transaction) {
+//更新账本，键版本号为"区块号#交易号"
+func (p *Peer) updateDB(v ValidateBlock) {
 
 }
 
-func (p *Peer) handleBlock(b Block) {
-
+func (p *Peer) handleBlock() {
+	for {
+		select {
+		case newBlock := <-blockChan:
+			validateNewBlock := p.validate(newBlock)
+			p.commiter(newBlock)
+			p.updateDB(validateNewBlock)
+		}
+	}
 }
 
 //客户端调用，发送交易提案给Peer
@@ -124,7 +170,7 @@ func callWait(wg *sync.WaitGroup, org string, peerid string, rpcname string, arg
 
 //排序节点调用，发送区块给主节点
 func (p *Peer) PushBlock(puArgs PuArgs, puReply PuReply) {
-	go p.handleBlock(puArgs.Block)
+	blockChan <- puArgs.Block
 	//如果是主节点，需要把区块同步推送到组织内其他节点
 	if p.isPrPeer == true {
 		var wg sync.WaitGroup
@@ -168,6 +214,8 @@ func (p *Peer) Server() {
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}
+	blockChan = make(chan Block, 10)
+	go p.handleBlock()
 	go http.Serve(l, nil)
 }
 
