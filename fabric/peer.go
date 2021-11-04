@@ -8,6 +8,7 @@ import (
 	"net/rpc"
 	"os"
 	"strconv"
+	"sync"
 )
 
 //一个块一个文件
@@ -112,17 +113,30 @@ func (p *Peer) TransProposal(args *ProposalArgs, reply *ProposalReply) {
 	return
 }
 
+func callWait(wg *sync.WaitGroup, org string, peerid string, rpcname string, args interface{}, reply interface{}) {
+	defer wg.Done()
+	err := call(org, peerid, rpcname, args, reply)
+	if err != nil {
+		fmt.Println("send block error in organization:", err)
+	}
+	return
+}
+
 //排序节点调用，发送区块给主节点
 func (p *Peer) PushBlock(puArgs PuArgs, puReply PuReply) {
+	go p.handleBlock(puArgs.Block)
 	//如果是主节点，需要把区块同步推送到组织内其他节点
 	if p.isPrPeer == true {
+		var wg sync.WaitGroup
+		wg.Add(len(peers) - 1)
 		for _, otherPeer := range peers {
 			if otherPeer != p.peerId {
 				args := PuArgs{Block: puArgs.Block}
 				reply := PuReply{}
-				go call(p.organization, otherPeer, "PushBlock", &args, &reply)
+				go callWait(&wg, p.organization, otherPeer, "PushBlock", &args, &reply)
 			}
 		}
+		wg.Wait()
 	}
 	return
 }
