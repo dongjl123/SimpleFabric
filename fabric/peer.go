@@ -131,6 +131,11 @@ func (p *Peer) validate(b Block) ValidateBlock {
 
 //这里写入账本的只是原始的区块，不带验证数据。只是一个模拟写账本文件的过程。
 func (p *Peer) commiter(b Block) {
+	data, err := Encode(b)
+	if err != nil {
+		fmt.Println("encode block for commit error:", err)
+		p.blockLedger.blockHeight += 1
+	}
 
 }
 
@@ -146,6 +151,7 @@ func (p *Peer) handleBlock() {
 			validateNewBlock := p.validate(newBlock)
 			p.commiter(newBlock)
 			p.updateDB(validateNewBlock)
+			pubilshEvent(validateNewBlock, p.eventList)
 		}
 	}
 }
@@ -222,6 +228,7 @@ func (p *Peer) Server() {
 func NewPeer(org string, peerid string, isprpeer bool) (*Peer, error) {
 	p := Peer{organization: org, peerId: peerid, isPrPeer: isprpeer}
 	p.db = make(stateDB)
+	p.eventList = make(map[string]eventHandler)
 	currentDir, _ := os.Getwd()
 	ledgerPath := currentDir + "/" + org + "_" + peerid
 	p.blockLedger = LedgerManager{dir: ledgerPath, blockHeight: 0}
