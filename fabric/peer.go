@@ -18,8 +18,8 @@ type LedgerManager struct {
 }
 
 type keyVersion struct {
-	blockHeight int
-	TxID        int
+	blockHeight string
+	TxID        string
 }
 type stateDBItem struct {
 	value   int
@@ -129,19 +129,45 @@ func (p *Peer) validate(b Block) ValidateBlock {
 	return vb
 }
 
+// create file with dir if dir is not exist
+// path is dir
+// name is file name
+func createFileWithDir(path string, name string, content []byte) {
+	err := os.MkdirAll(path, os.ModePerm)
+	if err != nil {
+		fmt.Println("Create block ledger file error", err)
+	}
+	file, err := os.OpenFile(path+"/"+name, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	if err != nil {
+		fmt.Println("Open block ledger file error", err)
+	}
+	defer file.Close()
+	_, err = file.Write(content)
+	if err != nil {
+		fmt.Println("Write block ledger file error", err)
+	}
+}
+
 //这里写入账本的只是原始的区块，不带验证数据。只是一个模拟写账本文件的过程。
 func (p *Peer) commiter(b Block) {
+	fileName := "Block_" + strconv.Itoa(p.blockLedger.blockHeight)
+	p.blockLedger.blockHeight += 1
 	data, err := Encode(b)
 	if err != nil {
 		fmt.Println("encode block for commit error:", err)
-		p.blockLedger.blockHeight += 1
 	}
-
+	createFileWithDir(p.blockLedger.dir, fileName, data)
 }
 
-//更新账本，键版本号为"区块号#交易号"
+//更新账本
 func (p *Peer) updateDB(v ValidateBlock) {
-
+	for _, vtx := range v {
+		if vtx.IsSuccess {
+			for _, wk := range vtx.Transaction.WriteSet {
+				p.db.put(wk.key, wk.value, keyVersion{blockHeight: strconv.Itoa(p.blockLedger.blockHeight), TxID: vtx.TxID})
+			}
+		}
+	}
 }
 
 func (p *Peer) handleBlock() {
