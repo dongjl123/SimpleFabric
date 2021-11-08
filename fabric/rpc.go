@@ -45,8 +45,8 @@ func peerSock(org, peerid string) string {
 	return s
 }
 
-func ordererSock(org, peerid string) string {
-	s := "/var/tmp/orderer-"
-	s = s + org + "-" + peerid
-	return s
-}
+// func ordererSock(org, peerid string) string {
+// 	s := "/var/tmp/orderer-"
+// 	s = s + org + "-" + peerid
+// 	return s
+// }
