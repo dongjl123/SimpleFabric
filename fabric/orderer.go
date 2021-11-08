@@ -12,7 +12,7 @@ import (
 var TxChan chan Transaction
 
 type OrderBuf struct {
-	mutx    sync.Mutex
+	// mutx    sync.Mutex
 	TxSlice []Transaction
 }
 
@@ -39,19 +39,19 @@ func (o *Orderer) GenerateBlock() {
 	for {
 		select {
 		case newTx := <-TxChan:
-			o.orderArgsBuf.mutx.Lock()
 			o.orderArgsBuf.TxSlice = append(o.orderArgsBuf.TxSlice, newTx)
 			if len(o.orderArgsBuf.TxSlice) >= o.maxBlockSize {
 				block := Block{TxSlice: o.orderArgsBuf.TxSlice[:o.maxBlockSize]}
 				o.orderArgsBuf.TxSlice = o.orderArgsBuf.TxSlice[o.maxBlockSize:]
 				//排序节点发送区块给各组织主节点
+				o.prPeerMap.mutx.Lock()
 				for org, peerid := range o.prPeerMap.prMap {
 					args := PuArgs{Block: block}
 					reply := PuReply{}
 					go call(org, peerid, "PushBlock", &args, &reply)
 				}
+				o.prPeerMap.mutx.Unlock()
 			}
-			o.orderArgsBuf.mutx.Unlock()
 		}
 	}
 }
@@ -82,7 +82,7 @@ func (o *Orderer) Server() {
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}
-	TxChan = make(chan Transaction, 10)
+	TxChan = make(chan Transaction, 1000)
 	go o.GenerateBlock()
 	go http.Serve(l, nil)
 }

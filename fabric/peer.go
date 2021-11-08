@@ -26,20 +26,24 @@ type stateDBItem struct {
 	version keyVersion
 }
 
-type stateDB map[string]stateDBItem
+type stateDB struct {
+	db map[string]stateDBItem
+	sync.RWMutex
+}
 
 type eventHandler struct {
-	informChan chan bool
+	informChans map[string]chan bool
+	sync.RWMutex
 }
 
 //存储peer信息的结构体，维护peer自身的一些状态
 type Peer struct {
 	organization string
 	peerId       string
-	db           stateDB
-	blockLedger  LedgerManager
+	db           *stateDB
+	blockLedger  *LedgerManager
 	isPrPeer     bool
-	eventList    map[string]eventHandler
+	eventList    *eventHandler
 }
 
 type ReadItem struct {
@@ -66,16 +70,22 @@ type ValidateBlock []ValidateTrascation
 
 var blockChan chan Block
 
-func (s stateDB) getVersion(key string) keyVersion {
-	return s[key].version
+func (s *stateDB) getVersion(key string) keyVersion {
+	s.RLock()
+	defer s.RUnlock()
+	return s.db[key].version
 }
 
-func (s stateDB) get(key string) (int, keyVersion) {
-	return s[key].value, s[key].version
+func (s *stateDB) get(key string) (int, keyVersion) {
+	s.RLock()
+	defer s.RUnlock()
+	return s.db[key].value, s.db[key].version
 }
 
-func (s stateDB) put(key string, val int, ver keyVersion) {
-	s[key] = stateDBItem{value: val, version: ver}
+func (s *stateDB) put(key string, val int, ver keyVersion) {
+	s.Lock()
+	defer s.Unlock()
+	s.db[key] = stateDBItem{value: val, version: ver}
 }
 
 //链码函数，转账功能
@@ -97,16 +107,18 @@ func (p *Peer) BePrimaryPeer() (ReprReply, error) {
 	return reprReply, err
 }
 
-func pubilshEvent(b ValidateBlock, eventList map[string]eventHandler) {
+func (p *Peer) pubilshEvent(b ValidateBlock) {
 	for _, i := range b {
-		e, ok := eventList[i.Transaction.TxID]
+		p.eventList.RLock()
+		e, ok := p.eventList.informChans[i.Transaction.TxID]
+		p.eventList.RUnlock()
 		if !ok {
 			continue
 		}
 		if i.IsSuccess {
-			e.informChan <- true
+			e <- true
 		} else {
-			e.informChan <- false
+			e <- false
 		}
 		return
 	}
@@ -177,7 +189,7 @@ func (p *Peer) handleBlock() {
 			validateNewBlock := p.validate(newBlock)
 			p.commiter(newBlock)
 			p.updateDB(validateNewBlock)
-			pubilshEvent(validateNewBlock, p.eventList)
+			p.pubilshEvent(validateNewBlock)
 		}
 	}
 }
@@ -222,11 +234,12 @@ func (p *Peer) PushBlock(puArgs PuArgs, puReply PuReply) {
 //注册事件，由客户调用，监听自己的交易是否被成功commit
 func (p *Peer) RegisterEvent(reArgs ReEvArgs, reReply ReEvReply) {
 	//一个潜在的bug，如果交易ID发生了哈希碰撞，可能会导致RPC连接一直挂着
-	newHandler := eventHandler{}
-	newHandler.informChan = make(chan bool)
-	p.eventList[reArgs.TxID] = newHandler
+	informChan := make(chan bool)
+	p.eventList.Lock()
+	p.eventList.informChans[reArgs.TxID] = informChan
+	p.eventList.Unlock()
 	select {
-	case isSuccess := <-newHandler.informChan:
+	case isSuccess := <-informChan:
 		if isSuccess == true {
 			reReply.IsSuccess = true
 		} else {
@@ -253,11 +266,11 @@ func (p *Peer) Server() {
 
 func NewPeer(org string, peerid string, isprpeer bool) (*Peer, error) {
 	p := Peer{organization: org, peerId: peerid, isPrPeer: isprpeer}
-	p.db = make(stateDB)
-	p.eventList = make(map[string]eventHandler)
+	p.db = &stateDB{db: make(map[string]stateDBItem)}
+	p.eventList = &eventHandler{informChans: make(map[string]chan bool)}
 	currentDir, _ := os.Getwd()
 	ledgerPath := currentDir + "/" + org + "_" + peerid
-	p.blockLedger = LedgerManager{dir: ledgerPath, blockHeight: 0}
+	p.blockLedger = &LedgerManager{dir: ledgerPath, blockHeight: 0}
 	if p.isPrPeer {
 		reprReply, err := p.BePrimaryPeer()
 		if err != nil || reprReply.IsSuccess == false {
