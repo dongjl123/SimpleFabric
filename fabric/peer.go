@@ -17,13 +17,13 @@ type LedgerManager struct {
 	blockHeight int
 }
 
-type keyVersion struct {
-	blockHeight string
+type KeyVersion struct {
+	BlockHeight string
 	TxID        string
 }
 type stateDBItem struct {
 	Value   int
-	version keyVersion
+	version KeyVersion
 }
 
 type stateDB struct {
@@ -49,7 +49,7 @@ type Peer struct {
 type ReadItem struct {
 	Key     string
 	Value   int
-	version keyVersion
+	Version KeyVersion
 }
 
 type WriteItem struct {
@@ -71,19 +71,19 @@ type ValidateBlock []ValidateTrascation
 
 var blockChan chan Block
 
-func (s *stateDB) getVersion(Key string) keyVersion {
+func (s *stateDB) getVersion(Key string) KeyVersion {
 	s.RLock()
 	defer s.RUnlock()
 	return s.db[Key].version
 }
 
-func (s *stateDB) get(Key string) (int, keyVersion) {
+func (s *stateDB) get(Key string) (int, KeyVersion) {
 	s.RLock()
 	defer s.RUnlock()
 	return s.db[Key].Value, s.db[Key].version
 }
 
-func (s *stateDB) put(Key string, val int, ver keyVersion) {
+func (s *stateDB) put(Key string, val int, ver KeyVersion) {
 	s.Lock()
 	defer s.Unlock()
 	s.db[Key] = stateDBItem{Value: val, version: ver}
@@ -94,8 +94,8 @@ func (p *Peer) transfer(args [3]string) RWSet {
 	val1, ver1 := p.db.get(args[0])
 	val2, ver2 := p.db.get(args[1])
 	transNum, _ := strconv.Atoi(args[2])
-	readKey1 := ReadItem{Key: args[0], Value: val1, version: ver1}
-	readKey2 := ReadItem{Key: args[1], Value: val2, version: ver2}
+	readKey1 := ReadItem{Key: args[0], Value: val1, Version: ver1}
+	readKey2 := ReadItem{Key: args[1], Value: val2, Version: ver2}
 	writeKey1 := WriteItem{Key: args[0], Value: val1 - transNum}
 	writeKey2 := WriteItem{Key: args[1], Value: val2 + transNum}
 	return RWSet{ReadSet: []ReadItem{readKey1, readKey2}, WriteSet: []WriteItem{writeKey1, writeKey2}}
@@ -137,10 +137,13 @@ func (p *Peer) validate(b Block) ValidateBlock {
 		for _, ri := range tx.RWSet.ReadSet {
 			if _, ok := outOfDateKeySet[ri.Key]; ok {
 				isRight = false
+				fmt.Println(tx, outOfDateKeySet, "conflict in the block")
 				break
 			}
-			if ri.version != p.db.getVersion(ri.Key) {
+			if ri.Version != p.db.getVersion(ri.Key) {
 				isRight = false
+				fmt.Println("ri:", ri, "get from db:", p.db.getVersion(ri.Key))
+				fmt.Println("conflict because of previous block")
 				break
 			}
 		}
@@ -189,7 +192,7 @@ func (p *Peer) updateDB(v ValidateBlock) {
 	for _, vtx := range v {
 		if vtx.IsSuccess {
 			for _, wk := range vtx.Transaction.WriteSet {
-				p.db.put(wk.Key, wk.Value, keyVersion{blockHeight: strconv.Itoa(p.blockLedger.blockHeight), TxID: vtx.TxID})
+				p.db.put(wk.Key, wk.Value, KeyVersion{BlockHeight: strconv.Itoa(p.blockLedger.blockHeight), TxID: vtx.TxID})
 			}
 		}
 	}
@@ -212,6 +215,7 @@ func (p *Peer) TransProposal(args *ProposalArgs, reply *ProposalReply) error {
 	if args.TP.FunName == "transfer" {
 		reply.RW = p.transfer(args.TP.Args)
 	} //后续在这里可以用if else添加其他处理函数
+	fmt.Println(reply.RW)
 	reply.IsSuccess = true
 	return nil
 }
@@ -247,7 +251,7 @@ func (p *Peer) PushBlock(puArgs *PuArgs, puReply *PuReply) error {
 //注册事件，由客户调用，监听自己的交易是否被成功commit
 func (p *Peer) RegisterEvent(reArgs *ReEvArgs, reReply *ReEvReply) error {
 	//一个潜在的bug，如果交易ID发生了哈希碰撞，可能会导致RPC连接一直挂着
-	fmt.Println(reArgs.TxID)
+	// fmt.Println(reArgs.TxID)
 	informChan := make(chan bool)
 	p.eventList.Lock()
 	// fmt.Println("write lock right")
@@ -284,6 +288,8 @@ func (p *Peer) Server() {
 func NewPeer(org string, peerid string, isprpeer bool) (*Peer, error) {
 	p := Peer{organization: org, peerId: peerid, isPrPeer: isprpeer}
 	p.db = &stateDB{db: make(map[string]stateDBItem)}
+	p.db.put("Bob", 1000, KeyVersion{BlockHeight: "0", TxID: "123"})
+	p.db.put("Alice", 1000, KeyVersion{BlockHeight: "0", TxID: "123"})
 	p.eventList = &eventHandler{informChans: make(map[string]chan bool)}
 	currentDir, _ := os.Getwd()
 	ledgerPath := currentDir + "/" + org + "_" + peerid

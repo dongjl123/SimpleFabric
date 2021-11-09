@@ -143,6 +143,7 @@ func Client(id int, doneChan chan bool) {
 	RWSlice := []RWSet{}
 	for i := 0; i < orgNum; i++ {
 		sendReply, err := SendProposal(orgs[i], peers[0], txp)
+		// fmt.Println("the", i, "reply is", sendReply.RW)
 		if err != nil {
 			fmt.Println("send Proposal fail: ", err)
 			continue
@@ -160,6 +161,8 @@ func Client(id int, doneChan chan bool) {
 	}
 	//生成交易，发送交易
 	Tx, err := NewTx(RWSlice[0], Identity)
+
+	fmt.Println(Tx)
 	if err != nil {
 		fmt.Println("New TX ERROR")
 		doneChan <- false
