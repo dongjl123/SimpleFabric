@@ -35,7 +35,7 @@ type Block struct {
 	TxSlice []Transaction
 }
 
-func (o *Orderer) GenerateBlock() {
+func (o *Orderer) generateBlock() {
 	for {
 		select {
 		case newTx := <-TxChan:
@@ -48,7 +48,7 @@ func (o *Orderer) GenerateBlock() {
 				for org, peerid := range o.prPeerMap.prMap {
 					args := PuArgs{Block: block}
 					reply := PuReply{}
-					go call(org, peerid, "PushBlock", &args, &reply)
+					go call(org, peerid, "Peer.PushBlock", &args, &reply)
 				}
 				o.prPeerMap.mutx.Unlock()
 			}
@@ -57,22 +57,22 @@ func (o *Orderer) GenerateBlock() {
 }
 
 //客户端调用，发送交易给排序节点
-func (o *Orderer) TransOrder(args *OrderArgs, reply *OrderReply) {
+func (o *Orderer) TransOrder(args *OrderArgs, reply *OrderReply) error {
 	TxChan <- args.TX
 	reply.IsSuccess = true
-	return
+	return nil
 }
 
 //peer调用，在排序节点上注册为主节点
-func (o *Orderer) RegisterPrimary(args *ReprArgs, reply *ReprReply) {
+func (o *Orderer) RegisterPrimary(args *ReprArgs, reply *ReprReply) error {
 	o.prPeerMap.mutx.Lock()
-	o.prPeerMap.prMap[args.org] = args.peerid
+	o.prPeerMap.prMap[args.Org] = args.Peerid
 	o.prPeerMap.mutx.Unlock()
 	reply.IsSuccess = true
-	return
+	return nil
 }
 
-func (o *Orderer) Server() {
+func (o *Orderer) Server() error {
 	rpc.Register(o)
 	rpc.HandleHTTP()
 	//l, e := net.Listen("tcp", ":1234")
@@ -83,8 +83,9 @@ func (o *Orderer) Server() {
 		log.Fatal("listen error:", e)
 	}
 	TxChan = make(chan Transaction, 1000)
-	go o.GenerateBlock()
+	go o.generateBlock()
 	go http.Serve(l, nil)
+	return nil
 }
 
 func NewOrder(org string, orderid string, maxblockszie int) (*Orderer, error) {

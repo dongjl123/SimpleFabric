@@ -5,7 +5,7 @@ import (
 	"os"
 	"strconv"
 
-	fb "../fabric"
+	fb "github.com/SimpleFabric/fabric"
 )
 
 //输入参数，发送交易数量
@@ -15,7 +15,7 @@ func main() {
 		os.Exit(1)
 	}
 	txNum, _ := strconv.Atoi(os.Args[1])
-	var TxResultchan chan bool = make(chan bool)
+	var TxResultchan chan bool = make(chan bool, 100)
 	var succSum int = 0
 	var totalSum int = 0
 	for i := 0; i < txNum; i++ {
@@ -28,10 +28,11 @@ func main() {
 				succSum++
 			}
 			totalSum++
+			fmt.Println("The total Tx is ", totalSum, " The success Tx is ", succSum)
 		}
 		if totalSum == txNum {
 			break
 		}
 	}
-	fmt.Println("The total Tx is ", txNum, " The success Tx is ", succSum)
+	fmt.Println("The total Tx is ", totalSum, " The success Tx is ", succSum)
 }

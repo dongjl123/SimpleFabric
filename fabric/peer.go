@@ -22,7 +22,7 @@ type keyVersion struct {
 	TxID        string
 }
 type stateDBItem struct {
-	value   int
+	Value   int
 	version keyVersion
 }
 
@@ -47,14 +47,14 @@ type Peer struct {
 }
 
 type ReadItem struct {
-	key     string
-	value   int
+	Key     string
+	Value   int
 	version keyVersion
 }
 
 type WriteItem struct {
-	key   string
-	value int
+	Key   string
+	Value int
 }
 type RWSet struct {
 	ReadSet  []ReadItem
@@ -70,22 +70,22 @@ type ValidateBlock []ValidateTrascation
 
 var blockChan chan Block
 
-func (s *stateDB) getVersion(key string) keyVersion {
+func (s *stateDB) getVersion(Key string) keyVersion {
 	s.RLock()
 	defer s.RUnlock()
-	return s.db[key].version
+	return s.db[Key].version
 }
 
-func (s *stateDB) get(key string) (int, keyVersion) {
+func (s *stateDB) get(Key string) (int, keyVersion) {
 	s.RLock()
 	defer s.RUnlock()
-	return s.db[key].value, s.db[key].version
+	return s.db[Key].Value, s.db[Key].version
 }
 
-func (s *stateDB) put(key string, val int, ver keyVersion) {
+func (s *stateDB) put(Key string, val int, ver keyVersion) {
 	s.Lock()
 	defer s.Unlock()
-	s.db[key] = stateDBItem{value: val, version: ver}
+	s.db[Key] = stateDBItem{Value: val, version: ver}
 }
 
 //链码函数，转账功能
@@ -93,25 +93,27 @@ func (p *Peer) transfer(args [3]string) RWSet {
 	val1, ver1 := p.db.get(args[0])
 	val2, ver2 := p.db.get(args[1])
 	transNum, _ := strconv.Atoi(args[2])
-	readKey1 := ReadItem{key: args[0], value: val1, version: ver1}
-	readKey2 := ReadItem{key: args[1], value: val2, version: ver2}
-	writeKey1 := WriteItem{key: args[0], value: val1 - transNum}
-	writeKey2 := WriteItem{key: args[1], value: val2 + transNum}
+	readKey1 := ReadItem{Key: args[0], Value: val1, version: ver1}
+	readKey2 := ReadItem{Key: args[1], Value: val2, version: ver2}
+	writeKey1 := WriteItem{Key: args[0], Value: val1 - transNum}
+	writeKey2 := WriteItem{Key: args[1], Value: val2 + transNum}
 	return RWSet{ReadSet: []ReadItem{readKey1, readKey2}, WriteSet: []WriteItem{writeKey1, writeKey2}}
 }
 
-func (p *Peer) BePrimaryPeer() (ReprReply, error) {
-	reprArgs := ReprArgs{peerid: p.peerId, org: p.organization}
+func (p *Peer) bePrimaryPeer() (ReprReply, error) {
+	reprArgs := ReprArgs{Peerid: p.peerId, Org: p.organization}
 	reprReply := ReprReply{}
-	err := call("orderorg", "orderer1", "RegisterPrimary", &reprArgs, &reprReply)
+	err := call("orderorg", "orderer1", "Orderer.RegisterPrimary", &reprArgs, &reprReply)
 	return reprReply, err
 }
 
 func (p *Peer) pubilshEvent(b ValidateBlock) {
 	for _, i := range b {
 		p.eventList.RLock()
+		// fmt.Println("read lock right")
 		e, ok := p.eventList.informChans[i.Transaction.TxID]
 		p.eventList.RUnlock()
+		// fmt.Println("read unlock right")
 		if !ok {
 			continue
 		}
@@ -120,8 +122,8 @@ func (p *Peer) pubilshEvent(b ValidateBlock) {
 		} else {
 			e <- false
 		}
-		return
 	}
+	return
 }
 
 //验证函数，比较读键的版本
@@ -131,7 +133,7 @@ func (p *Peer) validate(b Block) ValidateBlock {
 		isRight := true
 		//比较读键
 		for _, ri := range tx.RWSet.ReadSet {
-			if ri.version != p.db.getVersion(ri.key) {
+			if ri.version != p.db.getVersion(ri.Key) {
 				isRight = false
 				break
 			}
@@ -176,7 +178,7 @@ func (p *Peer) updateDB(v ValidateBlock) {
 	for _, vtx := range v {
 		if vtx.IsSuccess {
 			for _, wk := range vtx.Transaction.WriteSet {
-				p.db.put(wk.key, wk.value, keyVersion{blockHeight: strconv.Itoa(p.blockLedger.blockHeight), TxID: vtx.TxID})
+				p.db.put(wk.Key, wk.Value, keyVersion{blockHeight: strconv.Itoa(p.blockLedger.blockHeight), TxID: vtx.TxID})
 			}
 		}
 	}
@@ -195,12 +197,12 @@ func (p *Peer) handleBlock() {
 }
 
 //客户端调用，发送交易提案给Peer
-func (p *Peer) TransProposal(args *ProposalArgs, reply *ProposalReply) {
-	if args.TP.funName == "transfer" {
-		reply.RW = p.transfer(args.TP.args)
+func (p *Peer) TransProposal(args *ProposalArgs, reply *ProposalReply) error {
+	if args.TP.FunName == "transfer" {
+		reply.RW = p.transfer(args.TP.Args)
 	} //后续在这里可以用if else添加其他处理函数
 	reply.IsSuccess = true
-	return
+	return nil
 }
 
 func callWait(wg *sync.WaitGroup, org string, peerid string, rpcname string, args interface{}, reply interface{}) {
@@ -213,7 +215,7 @@ func callWait(wg *sync.WaitGroup, org string, peerid string, rpcname string, arg
 }
 
 //排序节点调用，发送区块给主节点
-func (p *Peer) PushBlock(puArgs PuArgs, puReply PuReply) {
+func (p *Peer) PushBlock(puArgs *PuArgs, puReply *PuReply) error {
 	blockChan <- puArgs.Block
 	//如果是主节点，需要把区块同步推送到组织内其他节点
 	if p.isPrPeer == true {
@@ -223,30 +225,34 @@ func (p *Peer) PushBlock(puArgs PuArgs, puReply PuReply) {
 			if otherPeer != p.peerId {
 				args := PuArgs{Block: puArgs.Block}
 				reply := PuReply{}
-				go callWait(&wg, p.organization, otherPeer, "PushBlock", &args, &reply)
+				go callWait(&wg, p.organization, otherPeer, "Peer.PushBlock", &args, &reply)
 			}
 		}
 		wg.Wait()
 	}
-	return
+	return nil
 }
 
 //注册事件，由客户调用，监听自己的交易是否被成功commit
-func (p *Peer) RegisterEvent(reArgs ReEvArgs, reReply ReEvReply) {
+func (p *Peer) RegisterEvent(reArgs *ReEvArgs, reReply *ReEvReply) error {
 	//一个潜在的bug，如果交易ID发生了哈希碰撞，可能会导致RPC连接一直挂着
+	fmt.Println(reArgs.TxID)
 	informChan := make(chan bool)
 	p.eventList.Lock()
+	// fmt.Println("write lock right")
 	p.eventList.informChans[reArgs.TxID] = informChan
 	p.eventList.Unlock()
+	// fmt.Println("write unlock right")
 	select {
 	case isSuccess := <-informChan:
+		// fmt.Println("get inform")
 		if isSuccess == true {
 			reReply.IsSuccess = true
 		} else {
 			reReply.IsSuccess = false
 		}
 	}
-	return
+	return nil
 }
 
 func (p *Peer) Server() {
@@ -272,7 +278,7 @@ func NewPeer(org string, peerid string, isprpeer bool) (*Peer, error) {
 	ledgerPath := currentDir + "/" + org + "_" + peerid
 	p.blockLedger = &LedgerManager{dir: ledgerPath, blockHeight: 0}
 	if p.isPrPeer {
-		reprReply, err := p.BePrimaryPeer()
+		reprReply, err := p.bePrimaryPeer()
 		if err != nil || reprReply.IsSuccess == false {
 			fmt.Println("register primary peer fail:", err)
 			return nil, err

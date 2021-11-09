@@ -28,8 +28,8 @@ type OrderReply struct {
 	IsSuccess bool
 }
 type ReprArgs struct {
-	peerid string
-	org    string
+	Peerid string
+	Org    string
 }
 type ReprReply struct {
 	IsSuccess bool
