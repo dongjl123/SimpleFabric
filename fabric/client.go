@@ -132,6 +132,21 @@ func endorserVaildator(RWSlice []RWSet) bool {
 	return true
 }
 
+func asySendProposal(orgname string, peername string, txp TransProposal, rwsetChan chan RWSet, successChan chan bool) {
+	sendReply, err := SendProposal(orgname, peername, txp)
+	if err != nil {
+		fmt.Println("send Proposal fail: ", err)
+		successChan <- false
+		return
+	}
+	if sendReply.IsSuccess == false {
+		fmt.Println("ERROR: ", orgname, peername, " endorser failed")
+		successChan <- false
+		return
+	}
+	rwsetChan <- sendReply.RW
+}
+
 //发送一笔写交易,并注册监听事件
 //因为在做本地通信测试时发现交易结束的太快
 //以至于来不及注册监听而发送永久阻塞，故先注册监听再发送交易
@@ -141,19 +156,26 @@ func Client(id int, doneChan chan bool) {
 	Args := [3]string{"Alice", "Bob", "10"}
 	txp := NewTxProposal("transfer", Args, Identity)
 	RWSlice := []RWSet{}
+	RWChan := make(chan RWSet, 2)
+	SuccessChan := make(chan bool)
 	for i := 0; i < orgNum; i++ {
-		sendReply, err := SendProposal(orgs[i], peers[0], txp)
-		// fmt.Println("the", i, "reply is", sendReply.RW)
-		if err != nil {
-			fmt.Println("send Proposal fail: ", err)
-			continue
-		}
-		if sendReply.IsSuccess == false {
-			fmt.Println("ERROR: ", orgs[i], peers[0], " endorser failed")
-		} else {
-			RWSlice = append(RWSlice, sendReply.RW)
+		go asySendProposal(orgs[i], peers[0], txp, RWChan, SuccessChan)
+	}
+	for {
+		select {
+		case isSuccess := <-SuccessChan:
+			if !isSuccess {
+				doneChan <- false
+				return
+			}
+		case rw := <-RWChan:
+			RWSlice = append(RWSlice, rw)
+			if len(RWSlice) == orgNum {
+				goto ForEnd
+			}
 		}
 	}
+ForEnd:
 	//提案搜集完毕，进行校验
 	if endorserVaildator(RWSlice) == false {
 		doneChan <- false
