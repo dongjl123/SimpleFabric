@@ -66,6 +66,7 @@ type ValidateTrascation struct {
 	IsSuccess bool
 }
 
+//存储持有验证结果的交易的块
 type ValidateBlock []ValidateTrascation
 
 var blockChan chan Block
@@ -129,13 +130,23 @@ func (p *Peer) pubilshEvent(b ValidateBlock) {
 //验证函数，比较读键的版本
 func (p *Peer) validate(b Block) ValidateBlock {
 	vb := ValidateBlock{}
+	outOfDateKeySet := make(map[string]bool) //在当前块中验证成功的交易的写键集合
 	for _, tx := range b.TxSlice {
 		isRight := true
 		//比较读键
 		for _, ri := range tx.RWSet.ReadSet {
+			if _, ok := outOfDateKeySet[ri.Key]; ok {
+				isRight = false
+				break
+			}
 			if ri.version != p.db.getVersion(ri.Key) {
 				isRight = false
 				break
+			}
+		}
+		if isRight {
+			for _, wi := range tx.RWSet.WriteSet {
+				outOfDateKeySet[wi.Key] = true
 			}
 		}
 		vb = append(vb, ValidateTrascation{Transaction: tx, IsSuccess: isRight})
