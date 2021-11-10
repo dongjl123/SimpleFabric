@@ -89,16 +89,31 @@ func (s *stateDB) put(Key string, val int, ver KeyVersion) {
 	s.db[Key] = stateDBItem{Value: val, version: ver}
 }
 
+//链码函数，创建账户
+func (p *Peer) createAccount(args [3]string) (RWSet, bool) {
+	if _, ok := p.db.db[args[0]]; ok {
+		fmt.Println("The account already exists!")
+		return RWSet{}, false
+	}
+	depositNum, _ := strconv.Atoi(args[1])
+	readKey1 := ReadItem{Key: args[0]}
+	writeKey1 := WriteItem{Key: args[0], Value: depositNum}
+	return RWSet{ReadSet: []ReadItem{readKey1}, WriteSet: []WriteItem{writeKey1}}, true
+}
+
 //链码函数，转账功能
-func (p *Peer) transfer(args [3]string) RWSet {
+func (p *Peer) transfer(args [3]string) (RWSet, bool) {
 	val1, ver1 := p.db.get(args[0])
 	val2, ver2 := p.db.get(args[1])
 	transNum, _ := strconv.Atoi(args[2])
+	if val1 < transNum {
+		return RWSet{}, false
+	}
 	readKey1 := ReadItem{Key: args[0], Value: val1, Version: ver1}
 	readKey2 := ReadItem{Key: args[1], Value: val2, Version: ver2}
 	writeKey1 := WriteItem{Key: args[0], Value: val1 - transNum}
 	writeKey2 := WriteItem{Key: args[1], Value: val2 + transNum}
-	return RWSet{ReadSet: []ReadItem{readKey1, readKey2}, WriteSet: []WriteItem{writeKey1, writeKey2}}
+	return RWSet{ReadSet: []ReadItem{readKey1, readKey2}, WriteSet: []WriteItem{writeKey1, writeKey2}}, true
 }
 
 func (p *Peer) bePrimaryPeer() (ReprReply, error) {
@@ -213,10 +228,12 @@ func (p *Peer) handleBlock() {
 //客户端调用，发送交易提案给Peer
 func (p *Peer) TransProposal(args *ProposalArgs, reply *ProposalReply) error {
 	if args.TP.FunName == "transfer" {
-		reply.RW = p.transfer(args.TP.Args)
+		reply.RW, reply.IsSuccess = p.transfer(args.TP.Args)
 	} //后续在这里可以用if else添加其他处理函数
+	if args.TP.FunName == "createAccount" {
+		reply.RW, reply.IsSuccess = p.createAccount(args.TP.Args)
+	}
 	fmt.Println(reply.RW)
-	reply.IsSuccess = true
 	return nil
 }
 
