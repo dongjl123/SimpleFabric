@@ -150,11 +150,9 @@ func asySendProposal(orgname string, peername string, txp TransProposal, rwsetCh
 //发送一笔写交易,并注册监听事件
 //因为在做本地通信测试时发现交易结束的太快
 //以至于来不及注册监听而发送永久阻塞，故先注册监听再发送交易
-func Client(id int, doneChan chan bool) {
+func Client(Identity string, doneChan chan bool, FunName string, Args [3]string) {
 	//生成交易提案，发送交易提案
-	Identity := "client" + strconv.Itoa(id)
-	Args := [3]string{"Alice", "Bob", "10"}
-	txp := NewTxProposal("transfer", Args, Identity)
+	txp := NewTxProposal(FunName, Args, Identity)
 	RWSlice := []RWSet{}
 	RWChan := make(chan RWSet, 2)
 	SuccessChan := make(chan bool)
