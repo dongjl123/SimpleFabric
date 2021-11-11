@@ -44,6 +44,7 @@ type Peer struct {
 	blockLedger  *LedgerManager
 	isPrPeer     bool
 	eventList    *eventHandler
+	blockBuf     map[int]Block
 }
 
 type ReadItem struct {
@@ -106,9 +107,9 @@ func (p *Peer) transfer(args [3]string) (RWSet, bool) {
 	val1, ver1 := p.db.get(args[0])
 	val2, ver2 := p.db.get(args[1])
 	transNum, _ := strconv.Atoi(args[2])
-	if val1 < transNum {
-		return RWSet{}, false
-	}
+	//if val1 < transNum {
+	//	return RWSet{}, false
+	//}
 	readKey1 := ReadItem{Key: args[0], Value: val1, Version: ver1}
 	readKey2 := ReadItem{Key: args[1], Value: val2, Version: ver2}
 	writeKey1 := WriteItem{Key: args[0], Value: val1 - transNum}
@@ -194,7 +195,7 @@ func createFileWithDir(path string, name string, content []byte) {
 //这里写入账本的只是原始的区块，不带验证数据。只是一个模拟写账本文件的过程。
 func (p *Peer) commiter(b Block) {
 	fileName := "Block_" + strconv.Itoa(p.blockLedger.blockHeight)
-	p.blockLedger.blockHeight += 1
+	// p.blockLedger.blockHeight += 1
 	data, err := Encode(b)
 	if err != nil {
 		fmt.Println("encode block for commit error:", err)
@@ -217,10 +218,23 @@ func (p *Peer) handleBlock() {
 	for {
 		select {
 		case newBlock := <-blockChan:
-			validateNewBlock := p.validate(newBlock)
-			p.commiter(newBlock)
-			p.updateDB(validateNewBlock)
-			p.pubilshEvent(validateNewBlock)
+			// 将收到的块放入buffer中
+			p.blockBuf[newBlock.BlockHeight] = newBlock
+			fmt.Println(newBlock.BlockHeight, p.blockLedger.blockHeight)
+			// 根据blockLedger.blockHeight从buffer中读取下一个块
+			for {
+				if _, ok := p.blockBuf[p.blockLedger.blockHeight+1]; !ok {
+					break
+				}
+				p.blockLedger.blockHeight += 1
+				nextBlock := p.blockBuf[p.blockLedger.blockHeight]
+				validateNewBlock := p.validate(nextBlock)
+				p.commiter(nextBlock)
+				p.updateDB(validateNewBlock)
+				p.pubilshEvent(validateNewBlock)
+				delete(p.blockBuf, p.blockLedger.blockHeight)
+			}
+
 		}
 	}
 }
@@ -308,6 +322,7 @@ func NewPeer(org string, peerid string, isprpeer bool) (*Peer, error) {
 	p.db.put("Bob", 1000, KeyVersion{BlockHeight: "0", TxID: "123"})
 	p.db.put("Alice", 1000, KeyVersion{BlockHeight: "0", TxID: "123"})
 	p.eventList = &eventHandler{informChans: make(map[string]chan bool)}
+	p.blockBuf = make(map[int]Block)
 	currentDir, _ := os.Getwd()
 	ledgerPath := currentDir + "/" + org + "_" + peerid
 	p.blockLedger = &LedgerManager{dir: ledgerPath, blockHeight: 0}

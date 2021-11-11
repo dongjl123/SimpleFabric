@@ -27,12 +27,13 @@ type Orderer struct {
 	orderId      string
 	orderArgsBuf *OrderBuf
 	prPeerMap    *PrimaryPeerMap
-	// blockLedger  LedgerManager
+	BlockHeight  int
 	maxBlockSize int
 }
 
 type Block struct {
-	TxSlice []Transaction
+	BlockHeight int
+	TxSlice     []Transaction
 }
 
 func (o *Orderer) generateBlock() {
@@ -41,7 +42,8 @@ func (o *Orderer) generateBlock() {
 		case newTx := <-TxChan:
 			o.orderArgsBuf.TxSlice = append(o.orderArgsBuf.TxSlice, newTx)
 			if len(o.orderArgsBuf.TxSlice) >= o.maxBlockSize {
-				block := Block{TxSlice: o.orderArgsBuf.TxSlice[:o.maxBlockSize]}
+				block := Block{BlockHeight: o.BlockHeight, TxSlice: o.orderArgsBuf.TxSlice[:o.maxBlockSize]}
+				o.BlockHeight++
 				o.orderArgsBuf.TxSlice = o.orderArgsBuf.TxSlice[o.maxBlockSize:]
 				//排序节点发送区块给各组织主节点
 				o.prPeerMap.mutx.Lock()
@@ -90,8 +92,9 @@ func (o *Orderer) Server() error {
 
 func NewOrder(org string, orderid string, maxblockszie int) (*Orderer, error) {
 	o := Orderer{organization: org, orderId: orderid, maxBlockSize: maxblockszie}
-	o.orderArgsBuf = &OrderBuf{TxSlice: make([]Transaction, 2*o.maxBlockSize)}
+	o.orderArgsBuf = &OrderBuf{TxSlice: make([]Transaction, 0, 2*o.maxBlockSize)}
 	o.prPeerMap = &PrimaryPeerMap{prMap: make(map[string]string)}
+	o.BlockHeight = 1
 	// currentDir, _ := os.Getwd()
 	// ledgerPath := currentDir + "/" + org + "_" + orderid
 	// o.blockLedger = LedgerManager{dir: ledgerPath, blockHeight: 0}
