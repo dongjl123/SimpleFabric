@@ -1,0 +1,21 @@
+Organizations: 
+  -  Orgname: org1
+     Peers: 
+      - Peername: peerA
+        Address: 114.214.169.171
+        Port: 1234
+      - Peername: peerB
+        Address: 114.214.169.172
+        Port: 1234
+  - Orgname: org2
+    Peers: 
+      - Peername: peerA
+        Address: 114.214.169.173
+        Port: 1234
+      - Peername: peerB
+        Address: 114.214.169.174
+        Port: 1234
+Orderers: 
+  - Orderername: orderer1
+    Address: 114.214.169.180
+    Port: 1234

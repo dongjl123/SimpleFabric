@@ -33,6 +33,7 @@ func main() {
 	// 	fmt.Fprintf(os.Stderr, "Orderer argument loss...\n")
 	// 	os.Exit(1)
 	// }
+	fb.LoadConfig()
 	orderorg := "orderorg"
 	orderid := "orderer1"
 	maxblocksize := 10
