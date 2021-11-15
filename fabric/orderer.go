@@ -7,12 +7,13 @@ import (
 	"net/http"
 	"net/rpc"
 	"sync"
+	"time"
 )
 
 var TxChan chan Transaction
 
 type OrderBuf struct {
-	// mutx    sync.Mutex
+	mutx    sync.Mutex
 	TxSlice []Transaction
 }
 
@@ -36,25 +37,55 @@ type Block struct {
 	TxSlice     []Transaction
 }
 
-func (o *Orderer) generateBlock() {
+func (o *Orderer) cutBlock(generateType int) {
+	var block Block
+	if generateType == 1 {
+		if len(o.orderArgsBuf.TxSlice) >= o.maxBlockSize {
+			block = Block{BlockHeight: o.BlockHeight, TxSlice: o.orderArgsBuf.TxSlice[:o.maxBlockSize]}
+			o.orderArgsBuf.TxSlice = o.orderArgsBuf.TxSlice[o.maxBlockSize:]
+		} else {
+			return
+		}
+	} else {
+		if len(o.orderArgsBuf.TxSlice) > 0 {
+			block = Block{BlockHeight: o.BlockHeight, TxSlice: o.orderArgsBuf.TxSlice}
+			o.orderArgsBuf.TxSlice = o.orderArgsBuf.TxSlice[len(o.orderArgsBuf.TxSlice):]
+		} else {
+			return
+		}
+	}
+	fmt.Println("Orderer generator block", o.BlockHeight, "and by type", generateType)
+	o.BlockHeight++
+	//排序节点发送区块给各组织主节点
+	o.prPeerMap.mutx.Lock()
+	for org, peerid := range o.prPeerMap.prMap {
+		args := PuArgs{Block: block}
+		reply := PuReply{}
+		go call(org, peerid, "Peer.PushBlock", &args, &reply)
+	}
+	o.prPeerMap.mutx.Unlock()
+}
+
+func (o *Orderer) receiveTrans() {
 	for {
 		select {
 		case newTx := <-TxChan:
+			o.orderArgsBuf.mutx.Lock()
 			o.orderArgsBuf.TxSlice = append(o.orderArgsBuf.TxSlice, newTx)
-			if len(o.orderArgsBuf.TxSlice) >= o.maxBlockSize {
-				block := Block{BlockHeight: o.BlockHeight, TxSlice: o.orderArgsBuf.TxSlice[:o.maxBlockSize]}
-				o.BlockHeight++
-				o.orderArgsBuf.TxSlice = o.orderArgsBuf.TxSlice[o.maxBlockSize:]
-				//排序节点发送区块给各组织主节点
-				o.prPeerMap.mutx.Lock()
-				for org, peerid := range o.prPeerMap.prMap {
-					args := PuArgs{Block: block}
-					reply := PuReply{}
-					go call(org, peerid, "Peer.PushBlock", &args, &reply)
-				}
-				o.prPeerMap.mutx.Unlock()
-			}
+			o.cutBlock(1)
+			o.orderArgsBuf.mutx.Unlock()
 		}
+	}
+}
+
+func (o *Orderer) generateBlockByTime() {
+	tick := time.Tick(10e9)
+
+	for {
+		<-tick
+		o.orderArgsBuf.mutx.Lock()
+		o.cutBlock(0)
+		o.orderArgsBuf.mutx.Unlock()
 	}
 }
 
@@ -89,7 +120,8 @@ func (o *Orderer) Server() error {
 		log.Fatal("listen error:", e)
 	}
 	TxChan = make(chan Transaction, 1000)
-	go o.generateBlock()
+	go o.receiveTrans()
+	go o.generateBlockByTime()
 	go http.Serve(l, nil)
 	return nil
 }

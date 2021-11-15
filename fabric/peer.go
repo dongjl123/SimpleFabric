@@ -220,7 +220,7 @@ func (p *Peer) handleBlock() {
 		case newBlock := <-blockChan:
 			// 将收到的块放入buffer中
 			p.blockBuf[newBlock.BlockHeight] = newBlock
-			fmt.Println(newBlock.BlockHeight, p.blockLedger.blockHeight)
+			fmt.Println("The peer blockHeight", p.blockLedger.blockHeight, ", now receive block", newBlock.BlockHeight)
 			// 根据blockLedger.blockHeight从buffer中读取下一个块
 			for {
 				if _, ok := p.blockBuf[p.blockLedger.blockHeight+1]; !ok {
