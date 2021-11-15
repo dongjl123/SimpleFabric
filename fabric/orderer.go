@@ -1,11 +1,11 @@
 package fabric
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"net/rpc"
-	"os"
 	"sync"
 )
 
@@ -77,10 +77,14 @@ func (o *Orderer) RegisterPrimary(args *ReprArgs, reply *ReprReply) error {
 func (o *Orderer) Server() error {
 	rpc.Register(o)
 	rpc.HandleHTTP()
-	//l, e := net.Listen("tcp", ":1234")
-	sockname := peerSock(o.organization, o.orderId)
-	os.Remove(sockname)
-	l, e := net.Listen("unix", sockname)
+	address, err := getAddress(o.organization, o.orderId)
+	if err != nil {
+		fmt.Println("Server start error: ", err)
+	}
+	l, e := net.Listen("tcp", address)
+	//sockname := peerSock(o.organization, o.orderId)
+	//os.Remove(sockname)
+	//l, e := net.Listen("unix", sockname)
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}

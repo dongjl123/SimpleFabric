@@ -304,10 +304,14 @@ func (p *Peer) RegisterEvent(reArgs *ReEvArgs, reReply *ReEvReply) error {
 func (p *Peer) Server() {
 	rpc.Register(p)
 	rpc.HandleHTTP()
-	//l, e := net.Listen("tcp", ":1234")
-	sockname := peerSock(p.organization, p.peerId)
-	os.Remove(sockname)
-	l, e := net.Listen("unix", sockname)
+	address, err := getAddress(p.organization, p.peerId)
+	if err != nil {
+		fmt.Println("Server start error: ", err)
+	}
+	l, e := net.Listen("tcp", address)
+	//sockname := peerSock(p.organization, p.peerId)
+	//os.Remove(sockname)
+	//l, e := net.Listen("unix", sockname)
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}

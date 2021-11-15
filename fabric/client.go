@@ -268,8 +268,7 @@ ForEnd:
 	// doneChan <- true
 	// return
 }
-
-func asyncCall(org string, peerid string, rpcname string, Args interface{}, reply interface{}) *rpc.Call {
+func getAddress(org string, peerid string) (string, error) {
 	var address, port string
 	if org == "orderorg" {
 		if peerid == yamlConfig.Orderers[0].Orderername {
@@ -289,7 +288,16 @@ func asyncCall(org string, peerid string, rpcname string, Args interface{}, repl
 		}
 	}
 	if address == "" {
-		fmt.Println("asyncCall: no matching config find")
+		return "", errors.New("no matching config find")
+	}
+	address = address + ":" + port
+	return address, nil
+}
+
+func asyncCall(org string, peerid string, rpcname string, Args interface{}, reply interface{}) *rpc.Call {
+	address, err := getAddress(org, peerid)
+	if err != nil {
+		fmt.Println("asyncCall: ", err)
 	}
 	c, err := rpc.DialHTTP("tcp", address+":"+port)
 	//sockname := peerSock(org, peerid)
@@ -301,28 +309,11 @@ func asyncCall(org string, peerid string, rpcname string, Args interface{}, repl
 }
 
 func call(org string, peerid string, rpcname string, Args interface{}, reply interface{}) error {
-	var address, port string
-	if org == "orderorg" {
-		if peerid == yamlConfig.Orderers[0].Orderername {
-			address = yamlConfig.Orderers[0].Address
-			port = yamlConfig.Orderers[0].Port
-		}
-	} else {
-		for _, x := range yamlConfig.Organizations {
-			if org == x.Orgname {
-				for _, y := range x.Peers {
-					if peerid == y.Peername {
-						address = y.Address
-						port = y.Port
-					}
-				}
-			}
-		}
+	address, err := getAddress(org, peerid)
+	if err != nil {
+		return err
 	}
-	if address == "" {
-		return errors.New("no matching config find")
-	}
-	c, err := rpc.DialHTTP("tcp", address+":"+port)
+	c, err := rpc.DialHTTP("tcp", address)
 	//sockname := peerSock(org, peerid)
 	//c, err := rpc.DialHTTP("unix", sockname)
 	if err != nil {
