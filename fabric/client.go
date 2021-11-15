@@ -299,7 +299,7 @@ func asyncCall(org string, peerid string, rpcname string, Args interface{}, repl
 	if err != nil {
 		fmt.Println("asyncCall: ", err)
 	}
-	c, err := rpc.DialHTTP("tcp", address+":"+port)
+	c, err := rpc.DialHTTP("tcp", address)
 	//sockname := peerSock(org, peerid)
 	//c, err := rpc.DialHTTP("unix", sockname)
 	if err != nil {
