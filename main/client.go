@@ -1,37 +1,41 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"math/rand"
-	"os"
 	"strconv"
 
 	fb "github.com/SimpleFabric/fabric"
 )
 
-var UserGroupA = make([]string, 100)
-var UserGroupB = make([]string, 100)
+var (
+	transType  int
+	accountNum int
+	txNum      int
+)
+var UserGroupA = make([]string, 5000)
+var UserGroupB = make([]string, 5000)
+
+func init() {
+	flag.IntVar(&transType, "t", 1, "the transaction type")
+	flag.IntVar(&txNum, "n", 0, "the transaction num")
+}
 
 func InitUser() {
 	for i := 0; i < len(UserGroupA); i++ {
 		UserGroupA[i] = "UserA" + strconv.Itoa(i)
 		UserGroupB[i] = "UserB" + strconv.Itoa(i)
-
 	}
 }
 
 //输入参数，交易类型（1-添加账户，2-转账），发送交易数量
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "Client argument loss...\n")
-		os.Exit(1)
-	}
+	flag.Parse()
 	fb.LoadConfig()
-	typeNum, _ := strconv.Atoi(os.Args[1])
-	txNum, _ := strconv.Atoi(os.Args[2])
-	realTxNum := txNum
 
-	if typeNum == 1 {
+	realTxNum := txNum
+	if transType == 1 {
 		realTxNum *= 2
 	}
 	InitUser()
@@ -40,7 +44,7 @@ func main() {
 	var totalSum int = 0
 	for i := 0; i < txNum; i++ {
 		Identity := "client" + strconv.Itoa(i)
-		switch typeNum {
+		switch transType {
 		case 1:
 			ArgsA := [3]string{UserGroupA[i], strconv.Itoa(rand.Intn(100) * 100)}
 			go fb.Client(Identity, TxResultchan, "createAccount", ArgsA)

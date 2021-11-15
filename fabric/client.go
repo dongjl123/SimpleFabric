@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"log"
+	"math/rand"
 	"net/rpc"
 	"strconv"
 	"time"
@@ -88,6 +89,7 @@ func SendProposal(org string, peerID string, txp TransProposal) (ProposalReply, 
 
 func ihash(key string) int {
 	h := fnv.New32a()
+	key = key + strconv.Itoa(rand.Intn(100000))
 	h.Write([]byte(key))
 	return int(h.Sum32() & 0x7fffffff)
 }
@@ -102,6 +104,11 @@ func Encode(data interface{}) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+/*
+生成交易id
+id string 客户端身份信息，如clientx
+data RWSet 交易提案的读写集
+*/
 func makeTxID(id string, data RWSet) (string, error) {
 	encodeData, err := Encode(data)
 	if err != nil {
