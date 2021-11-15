@@ -35,6 +35,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Peer argument loss...\n")
 		os.Exit(1)
 	}
+	fb.LoadConfig()
 	p, _ := fb.NewPeer(org, peerid, isprpeer)
 	go p.Server()
 	select {} //wait

@@ -3,12 +3,15 @@ package fabric
 import (
 	"bytes"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"log"
 	"net/rpc"
 	"strconv"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 //当前默认所有交易为写交易
@@ -20,6 +23,28 @@ import (
 var orgNum int = 2
 var orgs = [2]string{"org1", "org2"}
 var peers = [2]string{"peerA", "peerB"}
+
+type PeerConfig struct {
+	Peername string
+	Address  string
+	Port     string
+}
+
+type OrgConfig struct {
+	Orgname string
+	Peers   []PeerConfig
+}
+
+type OrderConfig struct {
+	Orderername string
+	Address     string
+	Port        string
+}
+
+type FabricConfig struct {
+	Organizations []OrgConfig
+	Orderers      []OrderConfig
+}
 
 //交易提案，应该包含交易调用的函数和参数，身份信息
 type TransProposal struct {
@@ -33,6 +58,20 @@ type Transaction struct {
 	TxID     string
 	Identity string
 	RWSet
+}
+
+var yamlConfig FabricConfig
+
+func LoadConfig() {
+	config := viper.New()
+	config.AddConfigPath("./")
+	config.SetConfigName("config")
+	config.SetConfigType("yaml")
+	config.ReadInConfig()
+	err := config.Unmarshal(&yamlConfig)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func NewTxProposal(FunName string, Args [3]string, Identity string) TransProposal {
@@ -231,9 +270,30 @@ ForEnd:
 }
 
 func asyncCall(org string, peerid string, rpcname string, Args interface{}, reply interface{}) *rpc.Call {
-	//c, err := rpc.DialHTTP("tcp", "127.0.0.1"+":1234")
-	sockname := peerSock(org, peerid)
-	c, err := rpc.DialHTTP("unix", sockname)
+	var address, port string
+	if org == "orderorg" {
+		if peerid == yamlConfig.Orderers[0].Orderername {
+			address = yamlConfig.Orderers[0].Address
+			port = yamlConfig.Orderers[0].Port
+		}
+	} else {
+		for _, x := range yamlConfig.Organizations {
+			if org == x.Orgname {
+				for _, y := range x.Peers {
+					if peerid == y.Peername {
+						address = y.Address
+						port = y.Port
+					}
+				}
+			}
+		}
+	}
+	if address == "" {
+		fmt.Println("asyncCall: no matching config find")
+	}
+	c, err := rpc.DialHTTP("tcp", address+":"+port)
+	//sockname := peerSock(org, peerid)
+	//c, err := rpc.DialHTTP("unix", sockname)
 	if err != nil {
 		log.Fatal("dialing:", err)
 	}
@@ -241,9 +301,30 @@ func asyncCall(org string, peerid string, rpcname string, Args interface{}, repl
 }
 
 func call(org string, peerid string, rpcname string, Args interface{}, reply interface{}) error {
-	//c, err := rpc.DialHTTP("tcp", "127.0.0.1"+":1234")
-	sockname := peerSock(org, peerid)
-	c, err := rpc.DialHTTP("unix", sockname)
+	var address, port string
+	if org == "orderorg" {
+		if peerid == yamlConfig.Orderers[0].Orderername {
+			address = yamlConfig.Orderers[0].Address
+			port = yamlConfig.Orderers[0].Port
+		}
+	} else {
+		for _, x := range yamlConfig.Organizations {
+			if org == x.Orgname {
+				for _, y := range x.Peers {
+					if peerid == y.Peername {
+						address = y.Address
+						port = y.Port
+					}
+				}
+			}
+		}
+	}
+	if address == "" {
+		return errors.New("no matching config find")
+	}
+	c, err := rpc.DialHTTP("tcp", address+":"+port)
+	//sockname := peerSock(org, peerid)
+	//c, err := rpc.DialHTTP("unix", sockname)
 	if err != nil {
 		log.Fatal("dialing:", err)
 	}

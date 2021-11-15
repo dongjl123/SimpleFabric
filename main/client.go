@@ -26,6 +26,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Client argument loss...\n")
 		os.Exit(1)
 	}
+	fb.LoadConfig()
 	typeNum, _ := strconv.Atoi(os.Args[1])
 	txNum, _ := strconv.Atoi(os.Args[2])
 	realTxNum := txNum
@@ -33,7 +34,6 @@ func main() {
 	if typeNum == 1 {
 		realTxNum *= 2
 	}
-
 	InitUser()
 	var TxResultchan chan bool = make(chan bool, 100)
 	var succSum int = 0
