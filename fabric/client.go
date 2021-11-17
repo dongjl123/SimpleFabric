@@ -7,10 +7,13 @@ import (
 	"fmt"
 	"hash/fnv"
 	"log"
+	"math/rand"
 	"net/rpc"
 	"strconv"
+	"sync"
 	"time"
 
+	"github.com/SimpleFabric/pool"
 	"github.com/spf13/viper"
 )
 
@@ -60,7 +63,15 @@ type Transaction struct {
 	RWSet
 }
 
+type clientEventHandler struct {
+	informChans map[string]chan bool
+	sync.RWMutex
+}
+
 var yamlConfig FabricConfig
+var configMap map[string]string
+var eventMap clientEventHandler
+var poolMap map[string]*pool.RPCPool
 
 func LoadConfig() {
 	config := viper.New()
@@ -72,6 +83,14 @@ func LoadConfig() {
 	if err != nil {
 		panic(err)
 	}
+	for _, x := range yamlConfig.Orderers {
+		configMap["orderorg"+x.Orderername] = x.Address + ":" + x.Port
+	}
+	for _, x := range yamlConfig.Organizations {
+		for _, y := range x.Peers {
+			configMap[x.Orgname+y.Peername] = y.Address + ":" + y.Port
+		}
+	}
 }
 
 func NewTxProposal(FunName string, Args [3]string, Identity string) TransProposal {
@@ -82,12 +101,13 @@ func NewTxProposal(FunName string, Args [3]string, Identity string) TransProposa
 func SendProposal(org string, peerID string, txp TransProposal) (ProposalReply, error) {
 	sendArgs := ProposalArgs{TP: txp}
 	sendReply := ProposalReply{}
-	err := call(org, peerID, "Peer.TransProposal", &sendArgs, &sendReply)
+	err := callWithPool(org, peerID, "Peer.TransProposal", &sendArgs, &sendReply)
 	return sendReply, err
 }
 
 func ihash(key string) int {
 	h := fnv.New32a()
+	key = key + strconv.Itoa(rand.Intn(100000))
 	h.Write([]byte(key))
 	return int(h.Sum32() & 0x7fffffff)
 }
@@ -102,6 +122,11 @@ func Encode(data interface{}) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+/*
+生成交易id
+id string 客户端身份信息，如clientx
+data RWSet 交易提案的读写集
+*/
 func makeTxID(id string, data RWSet) (string, error) {
 	encodeData, err := Encode(data)
 	if err != nil {
@@ -126,7 +151,7 @@ func NewTx(rwset RWSet, Identity string) (Transaction, error) {
 func SendTx(Tx Transaction) (OrderReply, error) {
 	ordArgs := OrderArgs{TX: Tx}
 	ordReply := OrderReply{}
-	err := call("orderorg", "orderer1", "Orderer.TransOrder", &ordArgs, &ordReply)
+	err := callWithPool("orderorg", "orderer1", "Orderer.TransOrder", &ordArgs, &ordReply)
 	return ordReply, err
 }
 
@@ -137,12 +162,12 @@ func SendTx(Tx Transaction) (OrderReply, error) {
 // 	return reReply, err
 // }
 
-func ClientRegisterEvent(txid string) *rpc.Call {
-	reArgs := ReEvArgs{TxID: txid}
-	reReply := ReEvReply{}
-	return asyncCall(orgs[0], peers[0], "Peer.RegisterEvent", &reArgs, &reReply)
+// func ClientRegisterEvent(txid string) *rpc.Call {
+// 	reArgs := ReEvArgs{TxID: txid}
+// 	reReply := ReEvReply{}
+// 	return asyncCall(orgs[0], peers[0], "Peer.RegisterEvent", &reArgs, &reReply)
 
-}
+// }
 
 //背书提案验证函数
 func endorserVaildator(RWSlice []RWSet) bool {
@@ -187,8 +212,6 @@ func asySendProposal(orgname string, peername string, txp TransProposal, rwsetCh
 }
 
 //发送一笔写交易,并注册监听事件
-//因为在做本地通信测试时发现交易结束的太快
-//以至于来不及注册监听而发送永久阻塞，故先注册监听再发送交易
 func Client(Identity string, doneChan chan bool, FunName string, Args [3]string) {
 	//生成交易提案，发送交易提案
 	txp := NewTxProposal(FunName, Args, Identity)
@@ -218,42 +241,46 @@ ForEnd:
 		doneChan <- false
 		return
 	}
-	//生成交易，发送交易
+	//生成交易
 	Tx, err := NewTx(RWSlice[0], Identity)
-
-	fmt.Println(Tx)
 	if err != nil {
 		fmt.Println("New TX ERROR")
 		doneChan <- false
 		return
 	}
-	eventChan := ClientRegisterEvent(Tx.TxID).Done
-	time.Sleep(time.Second)
+
+	//注册监听
+	eventMap.Lock()
+	eventMap.informChans[Tx.TxID] = doneChan
+	eventMap.Unlock()
+
+	//发送交易
 	sendReply, err := SendTx(Tx)
 	if err != nil || sendReply.IsSuccess == false {
 		fmt.Println("send Tx fail:", err)
 		doneChan <- false
 		return
 	}
+	return
 	// fmt.Println("send TX finish")
 	//监听
-	select {
-	case event := <-eventChan:
-		reply := event.Reply.(*ReEvReply)
-		err := event.Error
-		if err != nil {
-			fmt.Println("listen registered event error", err)
-			doneChan <- false
-			return
-		}
-		if reply.IsSuccess == false {
-			// fmt.Println("TX fail")
-			doneChan <- false
-			return
-		}
-	}
-	doneChan <- true
-	return
+	// select {
+	// case event := <-eventChan:
+	// 	reply := event.Reply.(*ReEvReply)
+	// 	err := event.Error
+	// 	if err != nil {
+	// 		fmt.Println("listen registered event error", err)
+	// 		doneChan <- false
+	// 		return
+	// 	}
+	// 	if reply.IsSuccess == false {
+	// 		// fmt.Println("TX fail")
+	// 		doneChan <- false
+	// 		return
+	// 	}
+	// }
+	// doneChan <- true
+	// return
 	// reReply, err := ClientRegisterEvent(Tx.TxID)
 	// if err != nil {
 	// 	fmt.Println("listen registered event error")
@@ -269,29 +296,11 @@ ForEnd:
 	// return
 }
 func getAddress(org string, peerid string) (string, error) {
-	var address, port string
-	if org == "orderorg" {
-		if peerid == yamlConfig.Orderers[0].Orderername {
-			address = yamlConfig.Orderers[0].Address
-			port = yamlConfig.Orderers[0].Port
-		}
+	if address, ok := configMap[org+peerid]; ok {
+		return address, nil
 	} else {
-		for _, x := range yamlConfig.Organizations {
-			if org == x.Orgname {
-				for _, y := range x.Peers {
-					if peerid == y.Peername {
-						address = y.Address
-						port = y.Port
-					}
-				}
-			}
-		}
-	}
-	if address == "" {
 		return "", errors.New("no matching config find")
 	}
-	address = address + ":" + port
-	return address, nil
 }
 
 func asyncCall(org string, peerid string, rpcname string, Args interface{}, reply interface{}) *rpc.Call {
@@ -322,4 +331,89 @@ func call(org string, peerid string, rpcname string, Args interface{}, reply int
 	defer c.Close()
 	err = c.Call(rpcname, Args, reply)
 	return err
+}
+
+func callWithPool(org string, peerid string, rpcname string, Args interface{}, reply interface{}) error {
+	c, err := poolMap[org+peerid].Get()
+	if err != nil {
+		log.Fatal("dialing:", err)
+	}
+	defer poolMap[org+peerid].Put(c)
+	err = c.Call(rpcname, Args, reply)
+	return err
+}
+
+func EventHandle(finishChan chan bool) {
+	eventMap.informChans = make(map[string]chan bool)
+	for {
+		select {
+		case <-finishChan:
+			return
+		default:
+			getargs := GetValidateMapArgs{}
+			getreply := GetValidateMapReply{}
+			err := call(orgs[0], peers[0], "Peer.GetValidateMap", &getargs, &getreply)
+			if err != nil {
+				fmt.Println("eventHandle error:", err)
+			}
+			eventMap.RLock()
+			for txid, isSuccess := range getreply.ValidateTxs {
+				if informChan, ok := eventMap.informChans[txid]; ok {
+					informChan <- isSuccess
+				}
+			}
+			eventMap.RUnlock()
+		}
+	}
+}
+
+func NewRpcPool() {
+	poolMap = make(map[string]*pool.RPCPool)
+	poolSize := 30
+	//make pool for org
+	for _, org := range orgs {
+		options := &pool.Options{
+			InitTargets:  []string{configMap[org+peers[0]]},
+			InitCap:      poolSize,
+			DialTimeout:  time.Second * 5,
+			IdleTimeout:  time.Second * 60,
+			ReadTimeout:  time.Second * 5,
+			WriteTimeout: time.Second * 5,
+		}
+		p, err := pool.NewRPCPool(options)
+		if err != nil {
+			fmt.Printf("Pool Error: %#v\n", err)
+			return
+		}
+		if p == nil {
+			fmt.Printf("Pool Error: p= %#v\n", p)
+			return
+		}
+		poolMap[org+peers[0]] = p
+	}
+	//make pool for orderer
+	options := &pool.Options{
+		InitTargets:  []string{configMap["orderorgorderer1"]},
+		InitCap:      poolSize,
+		DialTimeout:  time.Second * 5,
+		IdleTimeout:  time.Second * 60,
+		ReadTimeout:  time.Second * 5,
+		WriteTimeout: time.Second * 5,
+	}
+	p, err := pool.NewRPCPool(options)
+	if err != nil {
+		fmt.Printf("Pool Error: %#v\n", err)
+		return
+	}
+	if p == nil {
+		fmt.Printf("Pool Error: p= %#v\n", p)
+		return
+	}
+	poolMap["orderorgorderer1"] = p
+}
+
+func RpcPoolClose() {
+	for _, p := range poolMap {
+		p.Close()
+	}
 }

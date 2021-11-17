@@ -31,9 +31,10 @@ type stateDB struct {
 	sync.RWMutex
 }
 
-type eventHandler struct {
-	informChans map[string]chan bool
-	sync.RWMutex
+type peerEventHandler struct {
+	eventChan chan ValidateBlock
+	IsEvent   bool
+	// sync.Mutex
 }
 
 //存储peer信息的结构体，维护peer自身的一些状态
@@ -43,7 +44,7 @@ type Peer struct {
 	db           *stateDB
 	blockLedger  *LedgerManager
 	isPrPeer     bool
-	eventList    *eventHandler
+	eventHandler *peerEventHandler
 	blockBuf     map[int]Block
 }
 
@@ -124,23 +125,28 @@ func (p *Peer) bePrimaryPeer() (ReprReply, error) {
 	return reprReply, err
 }
 
+// func (p *Peer) pubilshEvent(b ValidateBlock) {
+// 	for _, i := range b {
+// 		p.eventList.RLock()
+// 		// fmt.Println("read lock right")
+// 		e, ok := p.eventList.informChans[i.Transaction.TxID]
+// 		p.eventList.RUnlock()
+// 		// fmt.Println("read unlock right")
+// 		if !ok {
+// 			continue
+// 		}
+// 		if i.IsSuccess {
+// 			e <- true
+// 		} else {
+// 			e <- false
+// 		}
+// 	}
+// 	return
+// }
 func (p *Peer) pubilshEvent(b ValidateBlock) {
-	for _, i := range b {
-		p.eventList.RLock()
-		// fmt.Println("read lock right")
-		e, ok := p.eventList.informChans[i.Transaction.TxID]
-		p.eventList.RUnlock()
-		// fmt.Println("read unlock right")
-		if !ok {
-			continue
-		}
-		if i.IsSuccess {
-			e <- true
-		} else {
-			e <- false
-		}
+	if p.eventHandler.IsEvent {
+		p.eventHandler.eventChan <- b
 	}
-	return
 }
 
 //验证函数，比较读键的版本
@@ -231,7 +237,7 @@ func (p *Peer) handleBlock() {
 				validateNewBlock := p.validate(nextBlock)
 				p.commiter(nextBlock)
 				p.updateDB(validateNewBlock)
-				p.pubilshEvent(validateNewBlock)
+				go p.pubilshEvent(validateNewBlock)
 				delete(p.blockBuf, p.blockLedger.blockHeight)
 			}
 
@@ -279,24 +285,39 @@ func (p *Peer) PushBlock(puArgs *PuArgs, puReply *PuReply) error {
 	return nil
 }
 
-//注册事件，由客户调用，监听自己的交易是否被成功commit
-func (p *Peer) RegisterEvent(reArgs *ReEvArgs, reReply *ReEvReply) error {
-	//一个潜在的bug，如果交易ID发生了哈希碰撞，可能会导致RPC连接一直挂着
-	// fmt.Println(reArgs.TxID)
-	informChan := make(chan bool)
-	p.eventList.Lock()
-	// fmt.Println("write lock right")
-	p.eventList.informChans[reArgs.TxID] = informChan
-	p.eventList.Unlock()
-	// fmt.Println("write unlock right")
-	select {
-	case isSuccess := <-informChan:
-		// fmt.Println("get inform")
-		if isSuccess == true {
-			reReply.IsSuccess = true
-		} else {
-			reReply.IsSuccess = false
-		}
+// //注册事件，由客户调用，监听自己的交易是否被成功commit
+// func (p *Peer) RegisterEvent(reArgs *ReEvArgs, reReply *ReEvReply) error {
+// 	//一个潜在的bug，如果交易ID发生了哈希碰撞，可能会导致RPC连接一直挂着
+// 	// fmt.Println(reArgs.TxID)
+// 	informChan := make(chan bool)
+// 	p.eventList.Lock()
+// 	// fmt.Println("write lock right")
+// 	p.eventList.informChans[reArgs.TxID] = informChan
+// 	p.eventList.Unlock()
+// 	// fmt.Println("write unlock right")
+// 	select {
+// 	case isSuccess := <-informChan:
+// 		// fmt.Println("get inform")
+// 		if isSuccess == true {
+// 			reReply.IsSuccess = true
+// 		} else {
+// 			reReply.IsSuccess = false
+// 		}
+// 	}
+// 	return nil
+// }
+
+//由客户端调用，获得验证块的结果
+func (p *Peer) GetValidateMap(geArgs *GetValidateMapArgs, geReply *GetValidateMapReply) error {
+	if p.eventHandler.IsEvent == false {
+		//p.eventHandler.Lock()
+		p.eventHandler.IsEvent = true
+		//p.eventHandler.Unlock()
+	}
+	vb := <-p.eventHandler.eventChan
+	geReply.ValidateTxs = make(map[string]bool)
+	for _, vtx := range vb {
+		geReply.ValidateTxs[vtx.TxID] = vtx.IsSuccess
 	}
 	return nil
 }
@@ -325,7 +346,8 @@ func NewPeer(org string, peerid string, isprpeer bool) (*Peer, error) {
 	p.db = &stateDB{db: make(map[string]stateDBItem)}
 	p.db.put("Bob", 1000, KeyVersion{BlockHeight: "0", TxID: "123"})
 	p.db.put("Alice", 1000, KeyVersion{BlockHeight: "0", TxID: "123"})
-	p.eventList = &eventHandler{informChans: make(map[string]chan bool)}
+	//p.eventList = &eventHandler{informChans: make(map[string]chan bool)}
+	p.eventHandler = &peerEventHandler{IsEvent: false, eventChan: make(chan ValidateBlock)}
 	p.blockBuf = make(map[int]Block)
 	currentDir, _ := os.Getwd()
 	ledgerPath := currentDir + "/" + org + "_" + peerid

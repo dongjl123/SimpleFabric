@@ -15,12 +15,19 @@ type PuArgs struct {
 type PuReply struct {
 	IsSuccess bool
 }
-type ReEvArgs struct {
-	TxID string
+
+// type ReEvArgs struct {
+// 	TxID string
+// }
+// type ReEvReply struct {
+// 	IsSuccess bool
+// }
+type GetValidateMapArgs struct {
 }
-type ReEvReply struct {
-	IsSuccess bool
+type GetValidateMapReply struct {
+	ValidateTxs map[string]bool
 }
+
 type OrderArgs struct {
 	TX Transaction
 }
