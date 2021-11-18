@@ -5,7 +5,6 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io"
-	"net"
 	"net/rpc"
 	"sync"
 	"time"
@@ -14,6 +13,8 @@ import (
 //库的源地址为https://github.com/flyaways/pool
 //由于池满机制不符合要求，故自己进行改写。
 //当池子满时，需要阻塞等待
+
+var get_num int = 0
 
 //RPCPool pool info
 type RPCPool struct {
@@ -31,37 +32,41 @@ type rpcIdleConn struct {
 
 //Get get from pool
 func (c *RPCPool) Get() (*rpc.Client, error) {
-	c.Mu.Lock()
 	conns := c.conns
-	c.Mu.Unlock()
-
 	if conns == nil {
 		return nil, errClosed
 	}
-	for {
-		select {
-		case wrapConn := <-conns:
-			if wrapConn == nil {
-				return nil, errClosed
-			}
-			//判断是否超时，超时则丢弃
-			if timeout := c.IdleTimeout; timeout > 0 {
-				if wrapConn.t.Add(timeout).Before(time.Now()) {
-					//丢弃并关闭该链接
-					c.close(wrapConn.conn)
-					continue
-				}
-			}
-			return wrapConn.conn, nil
-			// default:
-			// 	conn, err := c.factory()
-			// 	if err != nil {
-			// 		return nil, err
-			// 	}
-
-			// 	return conn, nil
-		}
+	wrapConn := <-conns
+	if wrapConn == nil {
+		return nil, errClosed
 	}
+	get_num += 1
+	fmt.Println("get success:", get_num)
+	return wrapConn.conn, nil
+	// 		}
+	// for {
+	// 	select {
+	// 	case wrapConn := <-conns:
+	// 		if wrapConn == nil {
+	// 			return nil, errClosed
+	// 		}
+	// 		//判断是否超时，超时则丢弃
+	// 		// if timeout := c.IdleTimeout; timeout > 0 {
+	// 		// 	if wrapConn.t.Add(timeout).Before(time.Now()) {
+	// 		// 		//丢弃并关闭该链接
+	// 		// 		c.close(wrapConn.conn)
+	// 		// 		continue
+	// 		// 	}
+	// 		// }
+	// 		return wrapConn.conn, nil
+	// 	default:
+	// 		conn, err := c.factory()
+	// 		if err != nil {
+	// 			return nil, err
+	// 		}
+	// 		return conn, nil
+	// 	}
+	// }
 }
 
 //Put put back to pool
@@ -76,14 +81,17 @@ func (c *RPCPool) Put(conn *rpc.Client) error {
 	if c.conns == nil {
 		return c.close(conn)
 	}
-
-	select {
-	case c.conns <- &rpcIdleConn{conn: conn, t: time.Now()}:
-		return nil
-	default:
-		//连接池已满，直接关闭该链接
-		return c.close(conn)
-	}
+	c.conns <- &rpcIdleConn{conn: conn, t: time.Now()}
+	get_num -= 1
+	fmt.Println("put success:", get_num)
+	return nil
+	// select {
+	// case c.conns <- &rpcIdleConn{conn: conn, t: time.Now()}:
+	// 	return nil
+	// default:
+	// 	//连接池已满，直接关闭该链接
+	// 	return c.close(conn)
+	// }
 }
 
 //Close close all connection
@@ -177,26 +185,27 @@ func NewRPCPool(o *Options) (*RPCPool, error) {
 	pool := &RPCPool{
 		conns: make(chan *rpcIdleConn, o.InitCap),
 		factory: func() (*rpc.Client, error) {
-			target := o.nextTarget()
+			target := (*o.targets)[0]
 			if target == "" {
 				return nil, errTargets
 			}
 
-			conn, err := net.DialTimeout("tcp", target, o.DialTimeout)
+			//conn, err := net.DialTimeout("tcp", target, o.DialTimeout)
+			conn, err := rpc.DialHTTP("tcp", target)
 			if err != nil {
 				return nil, err
 			}
 
-			encBuf := bufio.NewWriter(conn)
-			p := rpc.NewClientWithCodec(&Codec{
-				Closer:  conn,
-				Decoder: gob.NewDecoder(conn),
-				Encoder: gob.NewEncoder(encBuf),
-				EncBuf:  encBuf,
-				Timeout: o.WriteTimeout,
-			})
+			// encBuf := bufio.NewWriter(conn)
+			// p := rpc.NewClientWithCodec(&Codec{
+			// 	Closer:  conn,
+			// 	Decoder: gob.NewDecoder(conn),
+			// 	Encoder: gob.NewEncoder(encBuf),
+			// 	EncBuf:  encBuf,
+			// 	Timeout: o.WriteTimeout,
+			// })
 
-			return p, err
+			return conn, err
 		},
 		close:       func(v *rpc.Client) error { return v.Close() },
 		IdleTimeout: o.IdleTimeout,

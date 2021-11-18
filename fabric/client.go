@@ -83,6 +83,7 @@ func LoadConfig() {
 	if err != nil {
 		panic(err)
 	}
+	configMap = make(map[string]string)
 	for _, x := range yamlConfig.Orderers {
 		configMap["orderorg"+x.Orderername] = x.Address + ":" + x.Port
 	}
